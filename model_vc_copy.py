@@ -46,23 +46,18 @@ class Encoder(nn.Module):
         self.dim_neck = dim_neck
         self.freq = freq
         convolutions = []
-        for i in range(4):
+        for i in range(3):
         # "the input to the content encoder is the 80-dimensional mel-spectrogram of X1 concatenated with the speaker embedding" - I think the embeddings are copy pasted from a dataset, as the Speaker Decoder is pretrained and may not actually appear in this implementation?
             conv_layer = nn.Sequential(
         # "the input to the content encoder is the 80-dimensional mel-spectrogram of X1 concatenated with the speaker embedding. The concatenated features are fed into three 5 × 1 convolutional layers, each followed by batch normalization and ReLU activation. The number of channels is 512"
-                ConvNorm(1 if i==0 else 64 if i==1 else 128 if i==2 else 256,
-                         64 if i==0 else 128 if i==1 else 256 if i==2 else 512,
-                         kernel_size=3, stride=1,
-                         padding=1,
-                         dilation=1, w_init_gain='relu')
-                ,nn.BatchNorm2d(64 if i==0 else 128 if i==1 else 256 if i==2 else 512)
-                ,nn.ReLU()
-                ,nn.MaxPool2d(1,4)
-            )
-                
+                ConvNorm(80+dim_emb if i==0 else 512,
+                         512,
+                         kernel_size=5, stride=1,
+                         padding=2,
+                         dilation=1, w_init_gain='relu'),
+                nn.BatchNorm1d(512))
             convolutions.append(conv_layer)
         self.convolutions = nn.ModuleList(convolutions)
-
         
         # "Both the forward and backward cell dimensions are 32, so their (LSTMs) combined dimension is 64."
         self.lstm = nn.LSTM(512, dim_neck, 2, batch_first=True, bidirectional=True)
@@ -75,9 +70,9 @@ class Encoder(nn.Module):
         c_org = c_org.unsqueeze(-1).expand(-1, -1, x.size(-1))
         x = torch.cat((x, c_org), dim=1)
         for conv in self.convolutions:
-            x = conv(x)
+            x = F.relu(conv(x))
         x = x.transpose(1, 2)
-	 
+        
         self.lstm.flatten_parameters()
         # lstms output 64 dim
         outputs, _ = self.lstm(x)
@@ -107,7 +102,7 @@ class Decoder(nn.Module):
         self.lstm1 = nn.LSTM(dim_neck*2+dim_emb, dim_pre, 1, batch_first=True)
         
         convolutions = []
-        for i in range(3)
+        for i in range(3):
             conv_layer = nn.Sequential(
                 ConvNorm(dim_pre,
                          dim_pre,
