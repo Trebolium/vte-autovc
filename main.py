@@ -17,7 +17,7 @@ def overwrite_dir(directory):
 def main(config):
     # For fast training.
     cudnn.benchmark = True
-
+    do_nothing = 1
     with open(config.spmel_dir +'/spmel_params.yaml') as File:
         spmel_params = yaml.load(File, Loader=yaml.FullLoader)
     vocalSet = pathSpecDataset(config, spmel_params)
