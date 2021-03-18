@@ -83,13 +83,13 @@ class Utterances(Dataset):
     # this object will contain both melspecs and speaker embeddings taken from the train.pkl
     def __init__(self, config):
         """Initialize and preprocess the Utterances dataset."""
-        self.root_dir = config.spmel_dir
+        self.spmel_dir = config.spmel_dir
         self.len_crop = config.len_crop
         self.step = 10
         self.file_name = config.file_name
         self.one_hot = config.one_hot
 
-        # metaname = os.path.join(self.root_dir, "all_meta_data.pkl")
+        # metaname = os.path.join(self.spmel_dir, "all_meta_data.pkl")
         meta_all_data = pickle.load(open('./all_meta_data.pkl', "rb"))
         # split into training data
         num_training_speakers=config.train_size
@@ -157,7 +157,7 @@ class Utterances(Dataset):
                 if j < 2:  # fill in speaker id and embedding
                     uttrs[j] = tmp
                 else: # load the mel-spectrograms
-                    uttrs[j] = np.load(os.path.join(self.root_dir, tmp))
+                    uttrs[j] = np.load(os.path.join(self.spmel_dir, tmp))
             dataset[idx_offset+k] = uttrs
                    
     """__getitem__ selects a speaker and chooses a random subset of data (in this case

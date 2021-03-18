@@ -18,7 +18,7 @@ class Vt_Embedder(nn.Module):
         self.inc1Dim = 512
         self.final_embedding = 256
         self.latent_dim = 64
-        # self.num_classes= 6 # number of classes
+        self.num_classes= 6 # number of classes
         self.n_mels = spmel_params['n_mels']
         melsteps_per_second = spmel_params['sr'] / spmel_params['hop_size']
         self.window_size = math.ceil(config.chunk_seconds * melsteps_per_second)
@@ -113,6 +113,9 @@ class Vt_Embedder(nn.Module):
 #        self.class_layer_wAttn = nn.Sequential(
 #            nn.Linear(self.latent_dim, self.num_classes)
 #            )
+        self.class_layer_noAttn = nn.Sequential(
+                    nn.Linear(self.final_embedding, self.num_classes)
+                                )
 
     def forward(self, x): 
         if self.file_name == 'defaultName': pdb.set_trace()
@@ -154,33 +157,11 @@ class Vt_Embedder(nn.Module):
             print('fc3_by_chunk', fc3_by_chunk.shape)
             print('fc3_by_example.shape', fc3_by_example.shape)
             pdb.set_trace()
-        """Working on Attention Layer bit"""
-#        if self.use_attention == True:
-######################################################################################
-#            # num_examples not always batch size, if Dataloader's drop_last=true
-#            num_examples = int(xc2.shape[0]/self.chunk_num)
-#            # this 1layer FFNN takes the hidden state produced from the lstm layer
-#            # and learns a function to convert it into the ideal weights
-#            for i in range(num_examples):
-#                weight = self.feat2weight_ffnn(fc3_by_example[i])
-#                if i == 0:
-#                    weights_values = weight.unsqueeze(0)
-#                else:
-#                    weights_values = torch.cat((weights_values, weight.unsqueeze(0)))
-#
-#            if self.file_name == 'defaultName': pdb.set_trace()
-#            weights_values = weights_values.squeeze(2)
-#            attn_weights = F.softmax(weights_values, dim=1)
-#            # these weights are then applied to the 'hidden features' (multiplied together)
-#            attn_applied = attn_weights.unsqueeze(-1) * fc3_by_example
-#            # get the sum of all weighted features to produce context c
-#            context = torch.sum(attn_applied, dim=1)
-#            prediction = self.class_layer_wAttn(context)
-#            ##########################################################################
-#        else:
         flattened_fc3_example = fc3_by_example.view(fc3_by_example.shape[0], fc3_by_example.shape[1]*fc3_by_example.shape[2])
-        fc4_out = self.fc_layer4(flattened_fc3_example)
-        return fc4_out
+        emb = self.fc_layer4(flattened_fc3_example)
+        prediction = self.class_layer_noAttn(emb)
+        all_tensors = [xc1, xc2, xc3, xc4, xfc2, lstm_outs, fc3_by_chunk, emb]
+        return prediction, all_tensors
 
 def my_loss_function(prediction, target):
     loss = F.cross_entropy(prediction, target)

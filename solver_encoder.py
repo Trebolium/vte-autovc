@@ -62,8 +62,8 @@ class Solver(object):
         self.vte_checkpoint = torch.load(self.emb_ckpt)
         new_state_dict = OrderedDict()
         for i, (key, val) in enumerate(self.vte_checkpoint['model_state_dict'].items()):
-            if key.startswith('class_layer'):
-                continue
+#            if key.startswith('class_layer'):
+#                continue
             new_state_dict[key] = val 
         self.vte.load_state_dict(new_state_dict)
 
@@ -138,7 +138,8 @@ class Solver(object):
             # =================================================================================== #
 
             # informs generator to be in train mode 
-            emb_org = self.vte(x_real_chunked)
+            pred_style_idx, all_tensors = self.vte(x_real_chunked)
+            emb_org = all_tensors[-1]
             self.G = self.G.train()
             # x_identic_psnt consists of the original mel + the residual definiton added ontop
             x_identic, x_identic_psnt, code_real = self.G(x_real, emb_org, emb_org)
