@@ -4,6 +4,7 @@ from data_loader import get_loader, pathSpecDataset
 from torch.backends import cudnn
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
+from shutil import copyfile
 
 def str2bool(v):
     return v.lower() in ('true')
@@ -66,7 +67,7 @@ if __name__ == '__main__':
     parser.add_argument('--prnt_loss_weight', type=float, default=1.0, help='Determine weight applied to pre-net reconstruction loss')
  
     # Miscellaneous.
-    parser.add_argument('--load_ckpts', type=str, default='', help='toggle checkpoint load function')
+    parser.add_argument('--autovc_ckpt', type=str, default='', help='toggle checkpoint load function')
     parser.add_argument('--emb_ckpt', type=str, default='/homes/bdoc3/phonDet/results/newStandardAutovcSpmelParamsUnnormLatent64Out256/best_epoch_checkpoint.pth.tar', help='toggle checkpoint load function')
     parser.add_argument('--ckpt_freq', type=int, default=10000, help='frequency in steps to mark checkpoints')
     parser.add_argument('--spec_freq', type=int, default=10000, help='frequency in steps to print reconstruction illustrations')
@@ -86,5 +87,5 @@ if __name__ == '__main__':
     os.makedirs(config.data_dir +'/model_saves/' +config.file_name +'/image_comparison')
     with open(config.data_dir +'/model_saves/' +config.file_name +'/config.pkl', 'wb') as config_file:
         pickle.dump(config, config_file)
-
+    copyfile('./model_vc.py',(config.data_dir +'/model_saves/' +config.file_name +'/model_vc.py'))
     main(config)

@@ -31,7 +31,47 @@ def saveContourPlots(array_of_contours, file_path, list_of_strings, num_cols):
     plt.show()
     plt.savefig(file_path)
 
-#if __name__ == '__main__':
-#    hist_array = np.random.rand(16,7)
-#    print(hist_array)
-#    saveContourPlots(hist_array, './test.png', ['x','y','1','2','3','4','5','6','7'], 2)
+#from model_vc import Generator
+import torch
+
+def setup_gen(config, Generator):
+    G = Generator(config.dim_neck, config.dim_emb, config.dim_pre, config.freq)
+    g_optimizer = torch.optim.Adam(G.parameters(), config.adam_init)
+    g_checkpoint = torch.load(config.autovc_ckpt)
+    G.load_state_dict(g_checkpoint['model_state_dict'])
+    g_optimizer.load_state_dict(g_checkpoint['optimizer_state_dict'])
+    # fixes tensors on different devices error
+    # https://github.com/pytorch/pytorch/issues/2830
+    for state in g_optimizer.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.cuda(config.which_cuda)
+    previous_ckpt_iters = g_checkpoint['iteration']
+
+    G.to(config.device)
+    return G
+
+from vte_model import Vt_Embedder
+from collections import OrderedDict
+
+def setup_vte(config, spmel_params):
+    vte =  Vt_Embedder(config, spmel_params)
+    for param in vte.parameters():
+        param.requires_grad = False
+    vte_optimizer = torch.optim.Adam(vte.parameters(), 0.0001)
+    vte_checkpoint = torch.load(config.vte_ckpt)
+    new_state_dict = OrderedDict()
+    for i, (key, val) in enumerate(vte_checkpoint['model_state_dict'].items()):
+#            if key.startswith('class_layer'):
+#                continue
+        new_state_dict[key] = val
+    vte.load_state_dict(new_state_dict)
+
+    for state in vte_optimizer.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.cuda(which_cuda)
+
+    vte.to(config.device)
+    vte.eval()
+    return vte

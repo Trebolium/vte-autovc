@@ -34,7 +34,7 @@ class Solver(object):
         # Training configurations.
         self.batch_size = config.batch_size
         self.num_iters = config.num_iters
-        self.load_ckpts = config.load_ckpts
+        self.autovc_ckpt = config.autovc_ckpt
         self.emb_ckpt = config.emb_ckpt
         self.file_name = config.file_name
         self.one_hot = config.one_hot
@@ -79,8 +79,8 @@ class Solver(object):
         
         self.g_optimizer = torch.optim.Adam(self.G.parameters(), self.adam_init)
         tester=1
-        if self.load_ckpts!='':
-            g_checkpoint = torch.load(self.load_ckpts)
+        if self.autovc_ckpt!='':
+            g_checkpoint = torch.load(self.autovc_ckpt)
             self.G.load_state_dict(g_checkpoint['model_state_dict'])
             self.g_optimizer.load_state_dict(g_checkpoint['optimizer_state_dict'])
             # fixes tensors on different devices error
@@ -142,7 +142,7 @@ class Solver(object):
             emb_org = all_tensors[-1]
             self.G = self.G.train()
             # x_identic_psnt consists of the original mel + the residual definiton added ontop
-            x_identic, x_identic_psnt, code_real = self.G(x_real, emb_org, emb_org)
+            x_identic, x_identic_psnt, code_real, _, _ = self.G(x_real, emb_org, emb_org)
             # SHAPES OF X_REAL AND X_INDETIC/PSNT ARE NOT THE SAME AND MAY GIVE INCORRECT LOSS VALUES
             residual_from_psnt = x_identic_psnt - x_identic
             # pdb.set_trace()

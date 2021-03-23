@@ -186,27 +186,29 @@ class Encoder(nn.Module):
         # broadcasts c_org to a compatible shape to merge with x
         c_org = c_org.unsqueeze(-1).expand(-1, -1, x.size(-1)).unsqueeze(1)
         x = torch.cat((x, c_org), dim=2)
+        saved_enc_outs = [x] ###
         for conv in self.convolutions:
             x = conv(x)
+            saved_enc_outs.append(x) ###
         x = x.squeeze(2).transpose(-1,-2)
         self.lstm.flatten_parameters()
         # lstms output 64 dim
         outputs, _ = self.lstm(x)
         # backward is the first half of dimensions, forward is the second half
-        # pdb.set_trace()
+        saved_enc_outs.append(outputs.transpose(2,1)) ###
         out_forward = outputs[:, :, :self.dim_neck] #takes the first half of outputs
         out_backward = outputs[:, :, self.dim_neck:]
 
-        # pdb.set_trace()
         codes = []
         
         # for each timestep, skipping self.freq frames
         for i in range(0, outputs.size(1), self.freq):
             # remeber that i is self.freq, not increments of 1)
             codes.append(torch.cat((out_forward[:,i+self.freq-1,:],out_backward[:,i,:]), dim=-1))
-        
+        # this saves codes as an entire tensor instead of list
+        #saved_enc_outs.append(torch.cat(codes, dim=0)) 
         # if self.freq is 32, then codes is a list of 4 tensors of size 64
-        return codes
+        return codes, saved_enc_outs
 
 #class Decoder(nn.Module):
 #    """Decoder module:
@@ -272,18 +274,20 @@ class Decoder(nn.Module):
 
     def forward(self, x):
         #self.lstm1.flatten_parameters()
+        saved_dec_outs = [x.transpose(2,1)]
         x, _ = self.lstm1(x)
+        saved_dec_outs.append(x.transpose(2,1)) ###
         x = x.transpose(1, 2).unsqueeze(1)
-        
-        for conv in self.convolutions:
+        saved_dec_outs.append(x) ###
+        for i, conv in enumerate(self.convolutions):
             x = F.relu(conv(x))
+            saved_dec_outs.append(x) ###
         x = x.reshape(x.size(0), x.size(1)*x.size(2), -1).transpose(1,2)
-        
         outputs, _ = self.lstm2(x)
-        
+        saved_dec_outs.append(outputs.transpose(2,1)) ###
         decoder_output = self.linear_projection(outputs)
-
-        return decoder_output
+        saved_dec_outs.append(decoder_output.transpose(2,1)) ###
+        return decoder_output, saved_dec_outs
 
 # Still part of Decoder as indicated in paper Fig. 3 (c) - last two blocks 
 class Postnet(nn.Module):
@@ -392,7 +396,7 @@ class Generator(nn.Module):
     def forward(self, x, c_org, c_trg):
 
         # codes is a LIST of tensors                
-        codes = self.encoder(x, c_org)
+        codes, saved_enc_outs = self.encoder(x, c_org)
         # if no c_trg given, then just return the formatted encoder codes
         if c_trg is None:
             # concatenates the by stacking over the last (in 2D this would be vertical) dimensio by stacking over the last (in 2D this would be vertical) dimension. For lists it means the same
@@ -405,7 +409,7 @@ class Generator(nn.Module):
         code_exp = torch.cat(tmp, dim=1)
         # concat reformated encoder output with target speaker embedding
         encoder_outputs = torch.cat((code_exp, c_trg.unsqueeze(1).expand(-1,x.size(1),-1)), dim=-1)
-        mel_outputs = self.decoder(encoder_outputs)
+        mel_outputs, saved_dec_outs = self.decoder(encoder_outputs)
         # then put mel_ouputs through remaining postnet section of NN
         # the postnet process produces the RESIDUAL information that gets added to the mel output
         mel_outputs_postnet = self.postnet(mel_outputs.transpose(2,1))
@@ -417,5 +421,5 @@ class Generator(nn.Module):
         mel_outputs = mel_outputs.unsqueeze(1)
         mel_outputs_postnet = mel_outputs_postnet.unsqueeze(1)
         
-        return mel_outputs, mel_outputs_postnet, torch.cat(codes, dim=-1)
+        return mel_outputs, mel_outputs_postnet, torch.cat(codes, dim=-1), saved_enc_outs, saved_dec_outs
 
