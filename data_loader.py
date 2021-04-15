@@ -19,6 +19,7 @@ class pathSpecDataset(Dataset):
         self.window_size = math.ceil(config.chunk_seconds * melsteps_per_second) * config.chunk_num
         style_names = ['belt','lip_trill','straight','vocal_fry','vibrato','breathy']
         singer_names = ['m1_','m2_','m3_','m4_','m5_','m6_','m7_','m8_','m9_','m10_','m11_','f1_','f2_','f3_','f4_','f5_','f6_','f7_','f8_','f9_']
+        test_names = ['m2_','m10_','m3_','f2_','f4_'] #from newStandardAutovcSpmelParamsUnnormLatent64Out256 list
         #self.one_hot_array = np.eye(len(class_names))[np.arange(len(class_names))]
         dir_name, _, fileList = next(os.walk(self.config.spmel_dir))
         fileList = sorted(fileList)
@@ -30,9 +31,6 @@ class pathSpecDataset(Dataset):
                     if style_name in file_name:
                         for singer_idx, singer_name in enumerate(singer_names):
                             if singer_name in file_name:
-                                dataset.append((spmel, style_idx, singer_idx))
-                                break
-                        break
 
         self.dataset = dataset
         self.num_specs = len(dataset)
