@@ -30,10 +30,10 @@ def main(config):
         writer = SummaryWriter('testRuns/test')
     else:
         writer = SummaryWriter(comment = '_' +config.file_name)
-
+        
     solver = Solver(vocalSet_loader, config, spmel_params)
     solver.train(writer)
-        
+    
     
         
 
@@ -41,8 +41,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # use configurations from a previous model
-    parser.add_argument('--config_file', type=str, default='', help='path to config file to use')
-    parser.add_argument('--data_dir', type=str, default='/homes/bdoc3/my_data/autovc_data/vte-autovc', help='path to config file to use')
+    parser.add_argument('--use_ckpt_config', type=str2bool, default=False, help='path to config file to use')
+    parser.add_argument('--ckpt_model', type=str, default='', help='path to config file to use')
+    parser.add_argument('--data_dir', type=str, default='/homes/bdoc3/my_data/autovc_data/vte-autovc/model_saves', help='path to config file to use')
     # Model configuration.
     parser.add_argument('--lambda_cd', type=float, default=1, help='weight for hidden code loss')
     parser.add_argument('--dim_neck', type=int, default=32)
@@ -50,7 +51,6 @@ if __name__ == '__main__':
     parser.add_argument('--dim_pre', type=int, default=512)
     parser.add_argument('--freq', type=int, default=32)
     parser.add_argument('--one_hot', type=str2bool, default=False, help='Toggle 1-hot mode')
-    parser.add_argument('--shape_adapt', type=str2bool, default=True, help='adjust shapes of tensors to match automatically')
     parser.add_argument('--which_cuda', type=int, default=0, help='Determine which cuda to use')
     
     # Training configuration.
@@ -67,25 +67,45 @@ if __name__ == '__main__':
     parser.add_argument('--prnt_loss_weight', type=float, default=1.0, help='Determine weight applied to pre-net reconstruction loss')
  
     # Miscellaneous.
-    parser.add_argument('--autovc_ckpt', type=str, default='', help='toggle checkpoint load function')
     parser.add_argument('--emb_ckpt', type=str, default='/homes/bdoc3/phonDet/results/newStandardAutovcSpmelParamsUnnormLatent64Out256/best_epoch_checkpoint.pth.tar', help='toggle checkpoint load function')
     parser.add_argument('--ckpt_freq', type=int, default=10000, help='frequency in steps to mark checkpoints')
     parser.add_argument('--spec_freq', type=int, default=10000, help='frequency in steps to print reconstruction illustrations')
     parser.add_argument('--log_step', type=int, default=10)
     config = parser.parse_args()
-    if config.config_file != '':
-        config = pickle.load(open(config.config_file, 'rb'))
-    
+
+    if config.ckpt_model != '':
+        ckpt_path = os.path.join(config.data_dir, config.ckpt_model, 'ckpts')
+        for file_object in os.scandir(ckpt_path):
+            if file_object.name.endswith('.pth.tar'):
+                config.autovc_ckpt = file_object.path
+        if config.use_ckpt_config == True:
+            num_iters = config.num_iters
+            file_name = config.file_name
+            autovc_ckpt = config.autovc_ckpt
+            emb_ckpt = config.emb_ckpt
+            ckpt_model = config.ckpt_model
+            ckpt_freq = config.ckpt_freq
+            config = pickle.load(open(os.path.join(config.data_dir, config.ckpt_model, 'config.pkl'), 'rb'))
+            config.ckpt_model = ckpt_model
+            config.num_iters = num_iters
+            config.file_name = file_name
+            config.autovc_ckpt = autovc_ckpt
+            config.emb_ckpt = emb_ckpt
+            config.ckpt_freq = ckpt_freq
+
     if config.one_hot==True:
         config.dim_emb=config.train_size
     
     print(config)
-    # pdb.set_trace()
-    overwrite_dir(config.data_dir +'/model_saves/' +config.file_name)
-    os.makedirs(config.data_dir +'/model_saves/' +config.file_name +'/ckpts')
-    os.makedirs(config.data_dir +'/model_saves/' +config.file_name +'/generated_wavs')
-    os.makedirs(config.data_dir +'/model_saves/' +config.file_name +'/image_comparison')
-    with open(config.data_dir +'/model_saves/' +config.file_name +'/config.pkl', 'wb') as config_file:
+    if config.file_name == config.ckpt_model:
+        raise Exception("Your file name and ckpt_model name can't be the same")
+    overwrite_dir(config.data_dir +'/' +config.file_name)
+    os.makedirs(config.data_dir +'/' +config.file_name +'/ckpts')
+    os.makedirs(config.data_dir +'/' +config.file_name +'/generated_wavs')
+    os.makedirs(config.data_dir +'/' +config.file_name +'/image_comparison')
+    with open(config.data_dir +'/' +config.file_name +'/config.pkl', 'wb') as config_file:
         pickle.dump(config, config_file)
-    copyfile('./model_vc.py',(config.data_dir +'/model_saves/' +config.file_name +'/model_vc.py'))
+    open(config.data_dir +'/' +config.file_name +'/config.txt', 'a').write(str(config))
+    copyfile('./model_vc.py',(config.data_dir +'/' +config.file_name +'/this_model_vc.py'))
+    copyfile('./solver_encoder.py',(config.data_dir +'/' +config.file_name +'/solver_encoder.py'))
     main(config)

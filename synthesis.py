@@ -15,7 +15,6 @@ torch.set_num_threads(4)
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 
-
 def build_model():
     
     model = getattr(builder, hparams.builder)(
@@ -58,7 +57,6 @@ def wavegen(model, c=None, tqdm=tqdm):
     c = torch.FloatTensor(c.T).unsqueeze(0)
 
     initial_input = torch.zeros(1, 1, 1).fill_(0.0)
-
     # Transform data to GPU
     initial_input = initial_input.to(device)
     c = None if c is None else c.to(device)

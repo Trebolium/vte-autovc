@@ -2,7 +2,7 @@ from model_vc import Generator
 from vte_model import Vt_Embedder
 from collections import OrderedDict
 import torch
-import math, os
+import math, os, pickle
 import utils
 from scipy.signal import medfilt
 import numpy as np
@@ -28,30 +28,31 @@ class Solver(object):
         self.dim_emb = config.dim_emb
         self.dim_pre = config.dim_pre
         self.freq = config.freq
-        self.shape_adapt = config.shape_adapt
         self.which_cuda = config.which_cuda
 
         # Training configurations.
         self.batch_size = config.batch_size
         self.num_iters = config.num_iters
-        self.autovc_ckpt = config.autovc_ckpt
         self.emb_ckpt = config.emb_ckpt
         self.file_name = config.file_name
         self.one_hot = config.one_hot
         self.psnt_loss_weight = config.psnt_loss_weight 
         self.prnt_loss_weight = config.prnt_loss_weight 
         self.adam_init = config.adam_init
-
-
+        self.style_names = ['belt','lip_trill','straight','vocal_fry','vibrato','breathy']
+        self.singer_names = ['m1_','m2_','m3_','m4_','m5_','m6_','m7_','m8_','m9_','m10_','m11_','f1_','f2_','f3_','f4_','f5_','f6_','f7_','f8_','f9_']
         # Miscellaneous.
         self.use_cuda = torch.cuda.is_available()
         self.device = torch.device(f'cuda:{self.which_cuda}' if self.use_cuda else 'cpu')
         self.log_step = config.log_step
-        self.shape_adapt = config.shape_adapt
         self.ckpt_freq = config.ckpt_freq
         self.spec_freq = config.spec_freq
-         # Build the model and tensorboard.
+
+        self.singer_id_embs = torch.FloatTensor([embs[1] for embs in pickle.load(open('singer_id_embs.pkl','rb'))])
+        # Build the model and tensorboard.
         self.build_model()
+
+        self.avg_embs = np.load(os.path.dirname(config.emb_ckpt) +'/averaged_embs.npy')
 
     def build_model(self):
        
@@ -70,7 +71,7 @@ class Solver(object):
         for state in self.vte_optimizer.state.values():
             for k, v in state.items():
                 if isinstance(v, torch.Tensor):
-                    state[k] = v.cuda(self.which_cuda)
+                    state[k] = v.cuda(self.device)
 
         self.vte.to(self.device)
         self.vte.eval()
@@ -79,8 +80,8 @@ class Solver(object):
         
         self.g_optimizer = torch.optim.Adam(self.G.parameters(), self.adam_init)
         tester=1
-        if self.autovc_ckpt!='':
-            g_checkpoint = torch.load(self.autovc_ckpt)
+        if self.config.ckpt_model!='':
+            g_checkpoint = torch.load(self.config.autovc_ckpt)
             self.G.load_state_dict(g_checkpoint['model_state_dict'])
             self.g_optimizer.load_state_dict(g_checkpoint['optimizer_state_dict'])
             # fixes tensors on different devices error
@@ -88,7 +89,7 @@ class Solver(object):
             for state in self.g_optimizer.state.values():
                 for k, v in state.items():
                     if isinstance(v, torch.Tensor):
-                        state[k] = v.cuda()
+                        state[k] = v.to(self.device)
 
             self.previous_ckpt_iters = g_checkpoint['iteration']
             tester=2
@@ -115,6 +116,7 @@ class Solver(object):
         # Start training.
         print('Start training...')
         start_time = time.time()
+        log_list = []
         for i in range(self.previous_ckpt_iters, self.num_iters):
 
             # =================================================================================== #
@@ -138,18 +140,21 @@ class Solver(object):
             # =================================================================================== #
 
             # informs generator to be in train mode 
+
             pred_style_idx, all_tensors = self.vte(x_real_chunked)
             emb_org = all_tensors[-1]
+            #emb_org = torch.tensor(self.avg_embs[style_idx]).to(self.device)
+            #pdb.set_trace()
             self.G = self.G.train()
             # x_identic_psnt consists of the original mel + the residual definiton added ontop
             x_identic, x_identic_psnt, code_real, _, _ = self.G(x_real, emb_org, emb_org)
             # SHAPES OF X_REAL AND X_INDETIC/PSNT ARE NOT THE SAME AND MAY GIVE INCORRECT LOSS VALUES
             residual_from_psnt = x_identic_psnt - x_identic
             # pdb.set_trace()
-            if self.shape_adapt == True:
-                x_identic = x_identic.squeeze(1)
-                x_identic_psnt = x_identic_psnt.squeeze(1)
-                residual_from_psnt = residual_from_psnt.squeeze(1)
+            x_identic = x_identic.squeeze(1)
+            x_identic_psnt = x_identic_psnt.squeeze(1)
+            residual_from_psnt = residual_from_psnt.squeeze(1)
+
             g_loss_id = F.l1_loss(x_real, x_identic)   
             g_loss_id_psnt = F.l1_loss(x_real, x_identic_psnt)   
             
@@ -158,10 +163,9 @@ class Solver(object):
             # gets the l1 loss between original encoder output and reconstructed encoder output
             g_loss_cd = F.l1_loss(code_real, code_reconst)
 
-
             # Backward and optimize.
             # interesting - the loss is a sum of the decoder loss and the melspec loss
-            g_loss = (self.prnt_loss_weight * g_loss_id) + (self.psnt_loss_weight * g_loss_id_psnt) + (self.lambda_cd * g_loss_cd)
+            g_loss = (self.prnt_loss_weight * g_loss_id) + (self.psnt_loss_weight * g_loss_id_psnt) #+ ((self.lambda_cd  * (i / 100000)) * g_loss_cd)
             self.reset_grad()
             g_loss.backward()
             #pdb.set_trace()
@@ -195,21 +199,14 @@ class Solver(object):
                 for tag in keys:
                     log += ", {}: {:.4f}".format(tag, loss[tag])
                 print(log)
-
-
-
+                log_list.append(log)
 
             if (i+1) % self.spec_freq == 0:
                 # save x and x_hat images
                 x_real = x_real.cpu().data.numpy()
-                if self.shape_adapt == True:
-                    x_identic = x_identic.cpu().data.numpy()
-                    x_identic_psnt = x_identic_psnt.cpu().data.numpy()
-                    residual_from_psnt = residual_from_psnt.cpu().data.numpy()
-                else:
-                    x_identic = x_identic.squeeze(1).cpu().data.numpy()
-                    x_identic_psnt = x_identic_psnt.squeeze(1).cpu().data.numpy()
-                    residual_from_psnt = residual_from_psnt.squeeze(1).cpu().data.numpy()
+                x_identic = x_identic.cpu().data.numpy()
+                x_identic_psnt = x_identic_psnt.cpu().data.numpy()
+                residual_from_psnt = residual_from_psnt.cpu().data.numpy()
                 specs_list = []
                 for arr in x_real:
                     specs_list.append(arr)
@@ -227,15 +224,15 @@ class Solver(object):
                     spec = np.rot90(specs_list[j])
                     fig.add_subplot(rows, columns, j+1)
                     if j == 5 or j == 6:
-                        #pdb.set_trace()
                         spec = spec - np.min(spec)
                         plt.clim(0,1)
                     plt.imshow(spec)
-                    name = singer_idx[j%2]
+                    name = 'Singer ' +str(self.singer_names[singer_idx[j%2]]) +', Style ' +str(self.style_names[style_idx[j%2]])
                     plt.title(name)
                     plt.colorbar()
-                plt.savefig(self.config.data_dir +'/model_saves/' +self.file_name +'/image_comparison/' +str(i+1) +'iterations')
-                plt.close(name)
+                plt.savefig(self.config.data_dir +'/' +self.file_name +'/image_comparison/' +str(i+1) +'iterations')
+                plt.close()
+                #plt.close(name)
                 
             if (i+1) % self.ckpt_freq == 0:
                 print('Saving model...')
@@ -245,8 +242,8 @@ class Solver(object):
                     'loss': loss}
                 if os.path.exists(last_save):
                     os.remove(last_save)
-                torch.save(checkpoint, self.config.data_dir +'/model_saves/' +self.file_name +'/ckpts/' +'ckpt_' +str(i+1) +'.pth.tar')
-                last_save = self.config.data_dir +'/model_saves/' +self.file_name +'/ckpts/' +'ckpt_' +str(i+1) +'.pth.tar'
+                torch.save(checkpoint, self.config.data_dir +'/' +self.file_name +'/ckpts/' +'ckpt_' +str(i+1) +'.pth.tar')
+                last_save = self.config.data_dir +'/' +self.file_name +'/ckpts/' +'ckpt_' +str(i+1) +'.pth.tar'
                 # plotting history since last checkpoint downsampled by 100
                 print('Saving loss visuals...')
                 num_cols=1
@@ -255,14 +252,16 @@ class Solver(object):
                 modified_array = hist_arr[-self.ckpt_freq::down_samp_size,:]
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                file_path = self.config.data_dir +'/model_saves/' +self.file_name +'/ckpts/' +'ckpt_' +str(i+1) +'_loss.png'
+                file_path = self.config.data_dir +'/' +self.file_name +'/ckpts/' +'ckpt_' +str(i+1) +'_loss_since_ckpt.png'
                 labels = ['iter_steps','loss','loss_id','loss_id_psnt','loss_cd']
                 utils.saveContourPlots(modified_array, file_path, labels, num_cols) 
-                if (i+1) % (self.ckpt_freq*2) == 0:
-                    print('saving loss visuals of all history...')
-                    down_samp_size = math.ceil(i/num_graph_vals)
-                    modified_array = hist_arr[::down_samp_size,:]
-                    if os.path.exists(hist_file_path):
-                        os.remove(hist_file_path)
-                    hist_file_path = self.config.data_dir +'/model_saves/' +self.file_name +'/ckpts/' +'ckpt_' +str(i+1) +'_loss_all_history.png'
-                    utils.saveContourPlots(modified_array, hist_file_path, labels, num_cols) 
+                #if (i+1) % (self.ckpt_freq*2) == 0:
+                print('saving loss visuals of all history...')
+                down_samp_size = math.ceil(i/num_graph_vals)
+                modified_array = hist_arr[::down_samp_size,:]
+                if os.path.exists(hist_file_path):
+                    os.remove(hist_file_path)
+                hist_file_path = self.config.data_dir +'/' +self.file_name +'/ckpts/' +'ckpt_' +str(i+1) +'_loss_since_training_session.png'
+                utils.saveContourPlots(modified_array, hist_file_path, labels, num_cols) 
+                with open(self.config.data_dir +'/' +self.config.file_name +'/log_list.pkl', 'wb') as File:
+                    pickle.dump(log_list, File)
