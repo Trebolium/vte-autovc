@@ -18,7 +18,8 @@ class pathSpecDataset(Dataset):
         melsteps_per_second = spmel_params['sr'] / spmel_params['hop_size']
         self.window_size = math.ceil(config.chunk_seconds * melsteps_per_second) * config.chunk_num
         style_names = ['belt','lip_trill','straight','vocal_fry','vibrato','breathy']
-        singer_names = ['m1_','m2_','m3_','m4_','m5_','m6_','m7_','m8_','m9_','m10_','m11_','f1_','f2_','f3_','f4_','f5_','f6_','f7_','f8_','f9_']
+        # singer_names = ['m1_','m2_','m3_','m4_','m5_','m6_','m7_','m8_','m9_','m10_','m11_','f1_','f2_','f3_','f4_','f5_','f6_','f7_','f8_','f9_']
+        singer_names = ['m1_','removed','removed','m4_','m5_','m6_','m7_','m8_','m9_','removed','m11_','f1_','removed','f3_','removed','f5_','f6_','f7_','f8_','f9_']
         test_names = ['m2_','m10_','m3_','f2_','f4_'] #from newStandardAutovcSpmelParamsUnnormLatent64Out256 list
         #self.one_hot_array = np.eye(len(class_names))[np.arange(len(class_names))]
         dir_name, _, fileList = next(os.walk(self.config.spmel_dir))
@@ -27,10 +28,15 @@ class pathSpecDataset(Dataset):
         for file_name in fileList:
             if file_name.endswith('.npy'):
                 spmel = np.load(os.path.join(dir_name, file_name))
+
                 for style_idx, style_name in enumerate(style_names):
                     if style_name in file_name:
+
                         for singer_idx, singer_name in enumerate(singer_names):
                             if singer_name in file_name:
+                                dataset.append((spmel, style_idx, singer_idx))
+                                break
+                    break
 
         self.dataset = dataset
         self.num_specs = len(dataset)
@@ -38,6 +44,7 @@ class pathSpecDataset(Dataset):
     """__getitem__ selects a speaker and chooses a random subset of data (in this case
     an utterance) and randomly crops that data. It also selects the corresponding speaker
     embedding and loads that up. It will now also get corresponding pitch contour for such a file"""
+
     def __getitem__(self, index):
         # pick a random speaker
         dataset = self.dataset
