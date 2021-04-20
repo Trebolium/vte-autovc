@@ -62,7 +62,8 @@ b, a = butter_highpass(30, 16000, order=5)
 
 
 # audio file directory
-rootDir = '/import/c4dm-datasets/VCTK-Corpus-0.92/wav48_silence_trimmed'
+#rootDir = '/import/c4dm-datasets/VCTK-Corpus-0.92/wav48_silence_trimmed'
+rootDir = '/homes/bdoc3/custom'
 # spectrogram directory
 targetDirSpec = './spmel'
 # pitch contour directory
@@ -74,7 +75,7 @@ for directory in [targetDirSpec, targetDirPitch]:
         shutil.rmtree(directory)
     os.makedirs(directory)
 
-
+#targetDirSpec = './spmel'
 dirName, subdirList, _ = next(os.walk(rootDir))
 print('Found directory: %s' % dirName)
 
@@ -83,12 +84,12 @@ for subdir_idx, subdir in enumerate(sorted(subdirList)):
     os.makedirs(os.path.join(targetDirSpec,subdir))
     os.makedirs(os.path.join(targetDirPitch,subdir))
     _,_, fileList = next(os.walk(os.path.join(dirName,subdir)))
-    prng = RandomState(int(subdir[1:])) 
-    # pdb.set_trace()
+    #prng = RandomState(int(subdir[1:])) 
+    prng = RandomState(1) 
 
     for file_idx, fileName in enumerate(sorted(fileList)):
         # ensure that only mic1 files are processed
-        if fileName.endswith('mic1.flac'):
+        if fileName.endswith('wav'):
             print(f'{subdir}, {subdir_idx}/{len(subdirList)}, {fileName}, {file_idx}/{len(fileList)}')
             # Read audio file
             audio, sr = sf.read(os.path.join(dirName,subdir,fileName))
@@ -100,9 +101,9 @@ for subdir_idx, subdir in enumerate(sorted(subdirList)):
             resampled_wav = librosa.resample(wav, sr, 16000)
             # pdb.set_trace()
             # compute pitch contour
-            timestamp, frequency_prediction, confidence, activation = crepe.predict(resampled_wav, 16000, viterbi=False, step_size=16)
+#            timestamp, frequency_prediction, confidence, activation = crepe.predict(resampled_wav, 16000, viterbi=False, step_size=16)
             # preprocess pitch contour
-            one_hot_preprocessed_pitch_conotours = pitch_preprocessing(frequency_prediction, confidence)
+#            one_hot_preprocessed_pitch_conotours = pitch_preprocessing(frequency_prediction, confidence)
             # Compute spect
             D = pySTFT(resampled_wav).T
             # Convert to mel and normalize
@@ -114,8 +115,8 @@ for subdir_idx, subdir in enumerate(sorted(subdirList)):
             np.save(os.path.join(targetDirSpec, subdir, fileName[:-5]),
                     S.astype(np.float32), allow_pickle=False)    
             # save pitch contour
-            np.save(os.path.join(targetDirPitch, subdir, fileName[:-5]),
-                    one_hot_preprocessed_pitch_conotours.astype(np.float32), allow_pickle=False)
+#            np.save(os.path.join(targetDirPitch, subdir, fileName[:-5]),
+#                    one_hot_preprocessed_pitch_conotours.astype(np.float32), allow_pickle=False)
             # pdb.set_trace()
 
 print('time taken', time.time()-start_time)

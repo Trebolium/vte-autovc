@@ -5,7 +5,7 @@ Synthesis waveform from trained WaveNet.
 Modified from https://github.com/r9y9/wavenet_vocoder
 """
 
-import torch
+import torch, pdb
 from tqdm import tqdm
 import librosa
 from hparams import hparams
@@ -13,7 +13,8 @@ from wavenet_vocoder import builder
 
 torch.set_num_threads(4)
 use_cuda = torch.cuda.is_available()
-device = torch.device("cuda" if use_cuda else "cpu")
+device = torch.device("cuda:0" if use_cuda else "cpu")
+torch.cuda.set_device(device)
 
 def build_model():
     
@@ -40,14 +41,14 @@ def build_model():
 
 
 
-def wavegen(model, c=None, tqdm=tqdm):
+def wavegen(model, which_cuda, c=None, tqdm=tqdm):
     """Generate waveform samples by WaveNet.
     
     """
 
     model.eval()
     model.make_generation_fast_()
-
+    device = torch.device(f'cuda:{which_cuda}')
     Tc = c.shape[0]
     upsample_factor = hparams.hop_size
     # Overwrite length according to feature size

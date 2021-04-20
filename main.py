@@ -42,6 +42,7 @@ if __name__ == '__main__':
 
     # use configurations from a previous model
     parser.add_argument('--use_ckpt_config', type=str2bool, default=False, help='path to config file to use')
+    parser.add_argument('--exclude_test', type=str2bool, default=True, help='take singer ids to exclude from the VTEs config.test_list')
     parser.add_argument('--ckpt_model', type=str, default='', help='path to config file to use')
     parser.add_argument('--data_dir', type=str, default='/homes/bdoc3/my_data/autovc_data/vte-autovc/model_saves', help='path to config file to use')
     # Model configuration.
@@ -92,6 +93,9 @@ if __name__ == '__main__':
             config.autovc_ckpt = autovc_ckpt
             config.emb_ckpt = emb_ckpt
             config.ckpt_freq = ckpt_freq
+
+    if config.exclude_test == True: config.exclude_list = pickle.load(open(os.path.dirname(config.emb_ckpt) +'/config_params.pkl', 'rb')).test_list.split(' ')
+    else: config.exclude_list = []
 
     if config.one_hot==True:
         config.dim_emb=config.train_size
