@@ -1,4 +1,4 @@
-## AUTOVC: Zero-Shot Voice Style Transfer with Only Autoencoder Loss
+## AUTO-STC: Zero-Shot Singing Technique Transfer
 
 This repository features an adaptation of the AutoVC framework presented in [Zero-Shot Voice Style Transfer with Only Autoencoder Loss](http://proceedings.mlr.press/v97/qian19c.html). In this repository, we demonstrate the AutoVC framework's ability to disentangle singing attributes - namely singing techniques and singing content. There are multiple aspects to consider when doing this that we hope to highlight in the forthcoming publication
 
