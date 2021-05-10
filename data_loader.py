@@ -19,29 +19,36 @@ class SpecChunksFromPkl(Dataset):
         metadata = pickle.load(open('/homes/bdoc3/my_data/autovc_data/medleydb_singer_chunks/singer_chunks_metadata.pkl', 'rb'))
         dataset = []
         song_counter = 0
+        previous_filename = metadata[0][0][:-10]
+        list_by_track = []
         for entry in metadata:
             file_name = entry[0]
+            # if song path from metadata has changed, update dataset, start empty song list
+            if file_name[:-10] != previous_filename:
+                dataset.append(list_by_track)
+                previous_filename = file_name[:-10]
+                list_by_track = []
+                song_counter += 1
             spmel_chunks = entry[2]
             chunk_counter = 0
+            list_by_mel_chunks = []
             for spmel_chunk in spmel_chunks:
-                dataset.append((spmel_chunk, song_encounter, chunk_counter, file_name))
-                song_encounter += 1
-            song_counter += 1    
+                list_by_mel_chunks.append((spmel_chunk, song_counter, chunk_counter, file_name))
+                chunk_counter += 1
+            list_by_track.append(list_by_mel_chunks)
+        dataset.append(list_by_track)
+
         self.dataset = dataset
         self.num_specs = len(dataset)
-
-    """__getitem__ selects a speaker and chooses a random subset of data (in this case
-    an utterance) and randomly crops that data. It also selects the corresponding speaker
-    embedding and loads that up. It will now also get corresponding pitch contour for such a file"""
 
     def __getitem__(self, index):
         # pick a random speaker
         dataset = self.dataset
-        # spkr_data is literally a list of skpr_id, emb, and utterances from a single speaker
-        spmel_chunks, style_idx, singer_idx  = dataset[index]
+        # index specifies 
+        track_list = dataset[index]
+        spmel_chunk_list = track_list[random.randint(0,len(track_list)-1)]
+        spmel, song_counter, chunk_counter, file_name = spmel_chunk_list[random.randint(0,len(spmel_chunk_list)-1)]
         # pick random spmel_chunk with random crop
-        random.seed(1)
-        spmel = random.sample(spmel_chunks, 1)
         """Ensure all spmels are the length of (self.window_size * chunk_num)"""
         if spmel.shape[0] >= self.window_size:
             difference = spmel.shape[0] - self.window_size
@@ -51,7 +58,7 @@ class SpecChunksFromPkl(Dataset):
         # may need to set chunk_num to constant value so that all tensor sizes are of known shape for the LSTM
         # a constant will also mean it is easier to group off to be part of the same recording
         # the smallest is 301 frames. If the window sizes are 44, then that 6 full windows each
-        return adjusted_length_spmel, 1000, 1000
+        return adjusted_length_spmel, song_counter, chunk_counter, file_name
 
     def __len__(self):
         """Return the number of spkrs."""
@@ -73,26 +80,26 @@ class PathSpecDataset(Dataset):
         self.window_size = math.ceil(config.chunk_seconds * melsteps_per_second) * config.chunk_num
         style_names = ['belt','lip_trill','straight','vocal_fry','vibrato','breathy']
         singer_names = ['m1_','m2_','m3_','m4_','m5_','m6_','m7_','m8_','m9_','m10_','m11_','f1_','f2_','f3_','f4_','f5_','f6_','f7_','f8_','f9_']
-        if len(config.exclude_list) != 0:
-            for excluded_singer_id in config.exclude_list:
-                idx = singer_names.index(excluded_singer_id)
-                singer_names[idx] = 'removed'
-        #self.one_hot_array = np.eye(len(class_names))[np.arange(len(class_names))]
+#        if len(config.exclude_list) != 0:
+#            for excluded_singer_id in config.exclude_list:
+#                idx = singer_names.index(excluded_singer_id)
+#                singer_names[idx] = 'removed'
         dir_name, _, fileList = next(os.walk('/homes/bdoc3/my_data/phonDet/spmel_autovc_params_unnormalized'))
         fileList = sorted(fileList)
         dataset = []
-        for file_name in fileList:
-            if file_name.endswith('.npy'):
-                spmel = np.load(os.path.join(dir_name, file_name))
-
-                for style_idx, style_name in enumerate(style_names):
-                    if style_name in file_name:
-
-                        for singer_idx, singer_name in enumerate(singer_names):
-                            if singer_name in file_name:
-                                dataset.append((spmel, style_idx, singer_idx))
-                                break
-                        break
+        pdb.set_trace()
+        # group dataset by singers
+        for singer_idx, singer_name in enumerate(singer_names):
+            singer_examples = []
+            for file_name in fileList:
+                if file_name.startswith(singer_name) and file_name.endswith('.npy'):
+                    spmel = np.load(os.path.join(dir_name, file_name))
+                    for style_idx, style_name in enumerate(style_names):
+                        if style_name in file_name:
+                            singer_examples.append((spmel, style_idx))
+                            break #if stle found, break stype loop
+            dataset.append(singer_examples)
+        pdb.set_trace()
         self.dataset = dataset
         self.num_specs = len(dataset)
         

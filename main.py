@@ -1,9 +1,9 @@
-import os, pdb, pickle, random argparse, shutil, yaml
+import os, pdb, pickle, random, argparse, shutil, yaml
 from solver_encoder import Solver
 from data_loader import VctkFromMeta, PathSpecDataset, SpecChunksFromPkl
 from torch.backends import cudnn
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SubsetRandomSampler
 from shutil import copyfile
 
 def str2bool(v):
@@ -14,6 +14,16 @@ def overwrite_dir(directory):
         shutil.rmtree(directory)
     os.makedirs(directory)
     
+def new_song_idx(dataset):
+    # finds the index for each new song in dataset
+    new_Song_idxs = []
+    song_idxs = list(range(255))
+    for song_idx in song_idxs:
+        for ex_idx, ex in enumerate(dataset):
+            if ex[1] == song_idx:
+                new_Song_idxs.append(ex_idx)
+                break
+    return new_Song_idxs
 
 def main(config):
     # For fast training.
@@ -26,20 +36,18 @@ def main(config):
 
     elif config.use_loader == 'SpecChunksFromPkl':
         dataset = SpecChunksFromPkl(config, spmel_params)
-        test_song_idxs = random.sample(range(len(dataset), (len(dataset)//0.2)) 
-        train_song_idxs = range(len(dataset) - test_song_idxs
+        d_idx_list = list(range(len(dataset)))
+        train_song_idxs = random.sample(d_idx_list, int(len(dataset)*0.8)) 
+        test_song_idxs = [x for x in d_idx_list if x not in train_song_idxs]
         train_sampler = SubsetRandomSampler(train_song_idxs)
         test_sampler = SubsetRandomSampler(test_song_idxs)
     elif config.use_loader == 'VctkFromMeta':
         dataset = VctkFromMeta(config)
     else: raise NameError('use_loader string not valid')
     pdb.set_trace()
-
     train_loader = DataLoader(dataset, batch_size=config.batch_size, sampler=train_sampler, shuffle=False, drop_last=False)
     test_loader = DataLoader(dataset, batch_size=config.batch_size, sampler=test_sampler, shuffle=False, drop_last=False)
     #data_loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True, num_workers=1, drop_last=False)
-    # Data loader.
-    #vcc_loader = get_loader(config)
     # pass dataloader and configuration params to Solver NN
     if config.file_name == 'defaultName' or config.file_name == 'deletable':
         writer = SummaryWriter('testRuns/test')
@@ -47,13 +55,13 @@ def main(config):
     else:
         writer = SummaryWriter(comment = '_' +config.file_name)
         #writer = SummaryWriter(filename_suffix = config.file_name)
-        
-    solver = Solver(data_loader, config, spmel_params)
-    solver.train(writer)
     
+    solver = Solver(train_loader, config, spmel_params)
+    carried_iter = solver.get_current_iters()
+    for i in total iters:
+       carried_iters = solver.iterate(writer, 'train', train_loader, carried_iter)
+       carried_iters = solver.iterate(writer, 'test', test_loader, carried_iter)
     
-        
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
