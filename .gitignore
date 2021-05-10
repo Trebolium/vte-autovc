@@ -1,3 +1,8 @@
+Bounces/
+external_examples/
+external_examples_medleydb/
+spmel/
+metadatas_for_synths/
 runs/
 testRuns/
 .*.sw*

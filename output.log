@@ -1,0 +1,9 @@
+Fatal Python error: init_sys_streams: can't initialize sys standard streams
+Traceback (most recent call last):
+  File "/import/linux/python/3.7.7/lib/python3.7/io.py", line 52, in <module>
+    import abc
+  File "/import/linux/python/3.7.7/lib/python3.7/abc.py", line 166, in <module>
+    class ABC(metaclass=ABCMeta):
+  File "/import/linux/python/3.7.7/lib/python3.7/abc.py", line 125, in __new__
+    def __new__(mcls, name, bases, namespace, **kwargs):
+KeyboardInterrupt

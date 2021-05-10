@@ -14,13 +14,13 @@ import datetime
 # SOLVER IS THE MAIN SETUP FOR THE NN ARCHITECTURE. INSIDE SOLVER IS THE GENERATOR (G)
 class Solver(object):
 
-    def __init__(self, vocalSet_loader, config, spmel_params):
+    def __init__(self, data_loader, config, spmel_params):
         """Initialize configurations."""
     
         self.config = config
         self.spmel_params = spmel_params
         # Data loader.
-        self.vocalSet_loader = vocalSet_loader
+        self.data_loader = data_loader
 
         # Model configurations.
         self.lambda_cd = config.lambda_cd
@@ -79,9 +79,14 @@ class Solver(object):
         self.G = Generator(self.dim_neck, self.dim_emb, self.dim_pre, self.freq)        
         
         self.g_optimizer = torch.optim.Adam(self.G.parameters(), self.adam_init)
-        tester=1
         if self.config.ckpt_model!='':
-            g_checkpoint = torch.load(self.config.autovc_ckpt)
+#            _, _, ckpt_list = next(os.walk(self.config.ckpt_model +'/ckpts'))
+#            ckpt_name = ''
+#            for i in ckpt_list:
+#                if i.endswith('.tar'): ckpt_name = i
+#            ckpt_path = os.path.join(self.config.ckpt_model, 'ckpts', ckpt_name)
+            ckpt_path = os.path.join('/homes/bdoc3/my_data/autovc_data/autoStc', self.config.ckpt_model)
+            g_checkpoint = torch.load(ckpt_path)
             self.G.load_state_dict(g_checkpoint['model_state_dict'])
             self.g_optimizer.load_state_dict(g_checkpoint['optimizer_state_dict'])
             # fixes tensors on different devices error
@@ -108,15 +113,17 @@ class Solver(object):
 
     def train(self, writer):
         # Set data loader.
-        vocalSet_loader = self.vocalSet_loader
+        data_loader = self.data_loader
         hist_arr = np.array([0,0,0])
         # Print logs in specified order
         keys = ['G/loss_id','G/loss_id_psnt','G/loss_cd']
         last_save = file_path = hist_file_path =  'delete.txt' 
+        losses_list = [0., 0., 0.]
         # Start training.
         print('Start training...')
         start_time = time.time()
         log_list = []
+
         for i in range(self.previous_ckpt_iters, self.num_iters):
 
             # =================================================================================== #
@@ -129,11 +136,10 @@ class Solver(object):
             try:
                 x_real, style_idx, singer_idx = next(data_iter)
             except:
-                data_iter = iter(vocalSet_loader)
+                data_iter = iter(data_loader)
                 x_real, style_idx, singer_idx = next(data_iter)
         
-            x_real = x_real.to(self.device) 
-            
+            x_real = x_real.to(self.device).float() 
             x_real_chunked = x_real.view(x_real.shape[0]*self.config.chunk_num, x_real.shape[1]//self.config.chunk_num, -1)
             # =================================================================================== #
             #                               2. Train the generator                                #
@@ -176,10 +182,18 @@ class Solver(object):
             loss['G/loss_id'] = g_loss_id.item()
             loss['G/loss_id_psnt'] = g_loss_id_psnt.item()
             loss['G/loss_cd'] = g_loss_cd.item()
-            
-            writer.add_scalar(f"Loss_id/Train", loss['G/loss_id'], i)
-            writer.add_scalar(f"Loss_id_psnt/Train", loss['G/loss_id_psnt'], i)
-            writer.add_scalar(f"Loss_cd/Train", loss['G/loss_cd'], i)
+            losses_list[0] += g_loss_id.item()
+            losses_list[1] += g_loss_id_psnt.item()
+            losses_list[2] += g_loss_cd.item()
+
+            tb_freq = ((self.num_iters-self.previous_ckpt_iters)//1500)
+            if (i+1) % tb_freq == 0: 
+                writer.add_scalar(f"Loss_id/Train", losses_list[0]/tb_freq, i)
+                writer.add_scalar(f"Loss_id_psnt/Train", losses_list[1]/tb_freq, i)
+                #writer.add_scalar(f"Loss_cd/Train", losses_list[2]/tb_freq, i)
+                losses_list = [0.,0.,0.]
+                writer.flush()
+                print('writer flushed')
 
             if i==0:
                 hist_arr = np.array([g_loss_id.item(), g_loss_id_psnt.item(), g_loss_cd.item()])
@@ -227,12 +241,14 @@ class Solver(object):
                         spec = spec - np.min(spec)
                         plt.clim(0,1)
                     plt.imshow(spec)
-                    name = 'Singer ' +str(self.singer_names[singer_idx[j%2]]) +', Style ' +str(self.style_names[style_idx[j%2]])
+                    try:
+                        name = 'Singer ' +str(singer_idx[j%2]) +', Style ' +str(style_idx[j%2])
+                    except:
+                        pdb.set_trace()
                     plt.title(name)
                     plt.colorbar()
                 plt.savefig(self.config.data_dir +'/' +self.file_name +'/image_comparison/' +str(i+1) +'iterations')
                 plt.close()
-                #plt.close(name)
                 
             if (i+1) % self.ckpt_freq == 0:
                 print('Saving model...')
@@ -240,8 +256,8 @@ class Solver(object):
                     'optimizer_state_dict': self.g_optimizer.state_dict(),
                     'iteration': i+1,
                     'loss': loss}
-                if os.path.exists(last_save):
-                    os.remove(last_save)
+#                if os.path.exists(last_save):
+#                    os.remove(last_save)
                 torch.save(checkpoint, self.config.data_dir +'/' +self.file_name +'/ckpts/' +'ckpt_' +str(i+1) +'.pth.tar')
                 last_save = self.config.data_dir +'/' +self.file_name +'/ckpts/' +'ckpt_' +str(i+1) +'.pth.tar'
                 # plotting history since last checkpoint downsampled by 100
@@ -250,8 +266,8 @@ class Solver(object):
                 num_graph_vals = 200
                 down_samp_size = math.ceil(self.ckpt_freq/num_graph_vals)
                 modified_array = hist_arr[-self.ckpt_freq::down_samp_size,:]
-                if os.path.exists(file_path):
-                    os.remove(file_path)
+#                if os.path.exists(file_path):
+#                    os.remove(file_path)
                 file_path = self.config.data_dir +'/' +self.file_name +'/ckpts/' +'ckpt_' +str(i+1) +'_loss_since_ckpt.png'
                 labels = ['iter_steps','loss','loss_id','loss_id_psnt','loss_cd']
                 utils.saveContourPlots(modified_array, file_path, labels, num_cols) 
@@ -265,3 +281,4 @@ class Solver(object):
                 utils.saveContourPlots(modified_array, hist_file_path, labels, num_cols) 
                 with open(self.config.data_dir +'/' +self.config.file_name +'/log_list.pkl', 'wb') as File:
                     pickle.dump(log_list, File)
+        writer.close()

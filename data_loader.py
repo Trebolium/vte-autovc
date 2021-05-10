@@ -5,8 +5,62 @@ import os, pdb, pickle, random, math
        
 from multiprocessing import Process, Manager   
 
+class SpecChunksFromPkl(Dataset):
+    """Dataset class for using a pickle object,
+    pickle object second entry (index[1]) is list of spec arrays,
+    generates random windowed subspec examples,
+    associated labels,
+    optional conditioning."""
+    def __init__(self, config, spmel_params):
+        """Initialize and preprocess the dataset."""
+        self.config = config
+        melsteps_per_second = spmel_params['sr'] / spmel_params['hop_size']
+        self.window_size = math.ceil(config.chunk_seconds * melsteps_per_second) * config.chunk_num
+        metadata = pickle.load(open('/homes/bdoc3/my_data/autovc_data/medleydb_singer_chunks/singer_chunks_metadata.pkl', 'rb'))
+        dataset = []
+        song_counter = 0
+        for entry in metadata:
+            file_name = entry[0]
+            spmel_chunks = entry[2]
+            chunk_counter = 0
+            for spmel_chunk in spmel_chunks:
+                dataset.append((spmel_chunk, song_encounter, chunk_counter, file_name))
+                song_encounter += 1
+            song_counter += 1    
+        self.dataset = dataset
+        self.num_specs = len(dataset)
 
-class pathSpecDataset(Dataset):
+    """__getitem__ selects a speaker and chooses a random subset of data (in this case
+    an utterance) and randomly crops that data. It also selects the corresponding speaker
+    embedding and loads that up. It will now also get corresponding pitch contour for such a file"""
+
+    def __getitem__(self, index):
+        # pick a random speaker
+        dataset = self.dataset
+        # spkr_data is literally a list of skpr_id, emb, and utterances from a single speaker
+        spmel_chunks, style_idx, singer_idx  = dataset[index]
+        # pick random spmel_chunk with random crop
+        random.seed(1)
+        spmel = random.sample(spmel_chunks, 1)
+        """Ensure all spmels are the length of (self.window_size * chunk_num)"""
+        if spmel.shape[0] >= self.window_size:
+            difference = spmel.shape[0] - self.window_size
+            offset = random.randint(0, difference)
+        else: adjusted_length_spmel = spmel
+        adjusted_length_spmel = spmel[offset : offset + self.window_size]
+        # may need to set chunk_num to constant value so that all tensor sizes are of known shape for the LSTM
+        # a constant will also mean it is easier to group off to be part of the same recording
+        # the smallest is 301 frames. If the window sizes are 44, then that 6 full windows each
+        return adjusted_length_spmel, 1000, 1000
+
+    def __len__(self):
+        """Return the number of spkrs."""
+        return self.num_specs
+
+    def tester(self):
+        return self.window_size
+
+class PathSpecDataset(Dataset):
     """Dataset class for using a path to spec folders,
     path for labels,
     generates random windowed subspec examples,
@@ -24,7 +78,7 @@ class pathSpecDataset(Dataset):
                 idx = singer_names.index(excluded_singer_id)
                 singer_names[idx] = 'removed'
         #self.one_hot_array = np.eye(len(class_names))[np.arange(len(class_names))]
-        dir_name, _, fileList = next(os.walk(self.config.spmel_dir))
+        dir_name, _, fileList = next(os.walk('/homes/bdoc3/my_data/phonDet/spmel_autovc_params_unnormalized'))
         fileList = sorted(fileList)
         dataset = []
         for file_name in fileList:
@@ -68,13 +122,13 @@ class pathSpecDataset(Dataset):
 
 
 
-def get_loader(config, index_for_splits, num_workers=0):
+def get_loader(config, num_workers=0):
     """Build and return a data loader."""
 
-    dataset = Utterances(config, index_for_splits)
+    dataset = Utterances(config)
 
     worker_init_fn = lambda x: np.random.seed((torch.initial_seed()) % (2**32))
-    data_loader = data.DataLoader(dataset=dataset,
+    data_loader = DataLoader(dataset=dataset,
                                   batch_size=config.batch_size,
                                   shuffle=True,
                                   num_workers=num_workers,
@@ -83,20 +137,19 @@ def get_loader(config, index_for_splits, num_workers=0):
     return data_loader
 
 
-class Utterances(Dataset):
+class VctkFromMeta(Dataset):
     """Dataset class for the Utterances dataset."""
 
     # this object will contain both melspecs and speaker embeddings taken from the train.pkl
     def __init__(self, config):
         """Initialize and preprocess the Utterances dataset."""
-        self.spmel_dir = config.spmel_dir
+        self.config = config
         self.len_crop = config.len_crop
         self.step = 10
         self.file_name = config.file_name
         self.one_hot = config.one_hot
 
-        # metaname = os.path.join(self.spmel_dir, "all_meta_data.pkl")
-        meta_all_data = pickle.load(open('./all_meta_data.pkl', "rb"))
+        meta_all_data = pickle.load(open('/homes/bdoc3/my_data/autovc_data/autovc_basic/all_meta_data.pkl', "rb"))
         # split into training data
         num_training_speakers=config.train_size
         random.seed(1)
@@ -124,12 +177,12 @@ class Utterances(Dataset):
             # training_file_indices_array = np.asarray(training_file_indices)
             # test_file_indices = np.setdiff1d(np.arange(num_files_in_subdir), training_file_indices_array)
         meta = training_set
-        # pdb.set_trace()
-        with open(self.config.data_dir +'/model_saves/' +self.file_name +'/training_meta_data.pkl', 'wb') as train_pack:
+        # training set contains
+        with open(self.config.data_dir +'/' +self.file_name +'/training_meta_data.pkl', 'wb') as train_pack:
             pickle.dump(training_set, train_pack)
         # pdb.set_trace()
 
-        training_info = pickle.load(open(self.config.data_dir +'/model_saves/' +self.file_name +'/training_meta_data.pkl', 'rb'))
+        training_info = pickle.load(open(self.config.data_dir +'/' +self.file_name +'/training_meta_data.pkl', 'rb'))
         num_speakers_seq = np.arange(len(training_info))
         self.one_hot_array = np.eye(len(training_info))[num_speakers_seq]
         self.spkr_id_list = [spkr[0] for spkr in training_info]
@@ -148,7 +201,6 @@ class Utterances(Dataset):
         for p in processes:
             p.join()
         
-        # pdb.set_trace()    
         self.train_dataset = list(dataset)
         self.num_tokens = len(self.train_dataset)
         
@@ -163,7 +215,7 @@ class Utterances(Dataset):
                 if j < 2:  # fill in speaker id and embedding
                     uttrs[j] = tmp
                 else: # load the mel-spectrograms
-                    uttrs[j] = np.load(os.path.join(self.spmel_dir, tmp))
+                    uttrs[j] = np.load(os.path.join('/homes/bdoc3/my_data/autovc_data/spmel', tmp))
             dataset[idx_offset+k] = uttrs
                    
     """__getitem__ selects a speaker and chooses a random subset of data (in this case

@@ -63,7 +63,7 @@ b, a = butter_highpass(30, 16000, order=5)
 
 # audio file directory
 #rootDir = '/import/c4dm-datasets/VCTK-Corpus-0.92/wav48_silence_trimmed'
-rootDir = '/homes/bdoc3/custom'
+rootDir = '/homes/bdoc3/vte-autovc/Bounces'
 # spectrogram directory
 targetDirSpec = './spmel'
 # pitch contour directory

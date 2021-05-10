@@ -1,7 +1,7 @@
 import time, os, pdb, pickle, argparse, shutil, yaml, random, torch, math, time, pdb, datetime, pickle, sys
 import utils #file
 from solver_encoder import Solver 
-from data_loader import pathSpecDataset
+from data_loader_custom import pathSpecDataset
 from torch.utils.data import DataLoader
 from torch.backends import cudnn
 import matplotlib.pyplot as plt
@@ -54,6 +54,8 @@ female_idx = range(11,20)
 config.device = torch.device(f'cuda:{config.which_cuda}' if torch.cuda.is_available() else 'cpu')
 with open(config.spmel_dir +'/spmel_params.yaml') as File:
     spmel_params = yaml.load(File, Loader=yaml.FullLoader)
+
+config.spmel_dir = './spmel/dir2'
 
 # setup dataloader, models
 vocalSet = pathSpecDataset(config, spmel_params)

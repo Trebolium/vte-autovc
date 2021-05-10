@@ -37,7 +37,7 @@ import torch
 def setup_gen(config, Generator):
     G = Generator(config.dim_neck, config.dim_emb, config.dim_pre, config.freq)
     g_optimizer = torch.optim.Adam(G.parameters(), config.adam_init)
-    g_checkpoint = torch.load(config.autovc_ckpt)
+    g_checkpoint = torch.load(config.autovc_ckpt, map_location='cpu')
     G.load_state_dict(g_checkpoint['model_state_dict'])
     g_optimizer.load_state_dict(g_checkpoint['optimizer_state_dict'])
     # fixes tensors on different devices error
