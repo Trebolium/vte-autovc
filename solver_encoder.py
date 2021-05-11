@@ -15,9 +15,14 @@ import datetime
 class Solver(object):
 
     def __init__(self, data_loader, config, spmel_params):
-        """Initialize configurations."""
-    
+        """Initialize configurations.""" 
         self.config = config
+
+        if self.config.file_name == 'defaultName' or self.config.file_name == 'deletable':
+            self.writer = SummaryWriter('testRuns/test')
+        else:
+            self.writer = SummaryWriter(comment = '_' +self.config.file_name)
+
         self.spmel_params = spmel_params
         # Data loader.
         self.data_loader = data_loader
@@ -53,7 +58,7 @@ class Solver(object):
         self.build_model()
 
         self.avg_embs = np.load(os.path.dirname(config.emb_ckpt) +'/averaged_embs.npy')
-
+        self.cycle_size = 1000
     def build_model(self):
        
         self.vte =  Vt_Embedder(self.config, self.spmel_params)
@@ -114,13 +119,14 @@ class Solver(object):
    
         
 
-    def iterate(self, writer, mode, data_loader, carried_iter):
+    def iterate(self, mode, data_loader, carried_iter):
         pdb.set_trace()
         if mode == 'train':
             self.model.train()
             loss_hist=history_list[0]
             acc_hist=history_list[1]
             pred_target_labels, tech_singer_labels, accum_loss, accum_corrects = batch_iterate()
+            manage_metrics()
         elif mode == 'test':
             best_acc = 0 
             self.model.eval()
@@ -142,7 +148,7 @@ class Solver(object):
 
         def batch_iterate():
 
-            for i in range(carried_iter, self.num_iters):
+            for i in range(carried_iter, (carried_iter+self.cycle_size)):
 
                 # =================================================================================== #
                 #                             1. Preprocess input data                                #
@@ -194,48 +200,47 @@ class Solver(object):
                 g_loss.backward()
                 #pdb.set_trace()
                 self.g_optimizer.step()
-
-                # Logging.
-                loss = {}
-                loss['G/loss_id'] = g_loss_id.item()
-                loss['G/loss_id_psnt'] = g_loss_id_psnt.item()
-                loss['G/loss_cd'] = g_loss_cd.item()
+    
                 losses_list[0] += g_loss_id.item()
                 losses_list[1] += g_loss_id_psnt.item()
                 losses_list[2] += g_loss_cd.item()
-                manage_metrics()                
-
-            def manage_metrics():
-
-                tb_freq = ((self.num_iters-carried_iter)//1500)
                 
-                if (i+1) % tb_freq == 0: 
-                    writer.add_scalar(f"Loss_id/Train", losses_list[0]/tb_freq, i)
-                    writer.add_scalar(f"Loss_id_psnt/Train", losses_list[1]/tb_freq, i)
-                    #writer.add_scalar(f"Loss_cd/Train", losses_list[2]/tb_freq, i)
-                    losses_list = [0.,0.,0.]
-                    writer.flush()
-                    print('writer flushed')
+            return losses_list
 
-                if i==0:
-                    hist_arr = np.array([g_loss_id.item(), g_loss_id_psnt.item(), g_loss_cd.item()])
-                else:
-                    temp_arr = np.array([g_loss_id.item(), g_loss_id_psnt.item(), g_loss_cd.item()])
-                    hist_arr = np.vstack((hist_arr, temp_arr))
+        def log(g_loss, keys):
+            
+            # Logging.
+            loss = {}
+            loss['G/loss_id'] = g_loss_id.item()
+            loss['G/loss_id_psnt'] = g_loss_id_psnt.item()
+            loss['G/loss_cd'] = g_loss_cd.item() 
+
+            self.writer.add_scalar(f"Loss_id/{mode}", losses_list[0]/tb_freq, i)
+            self.writer.add_scalar(f"Loss_id_psnt/{mode}", losses_list[1]/tb_freq, i)
+            self.writer.add_scalar(f"Loss_cd/{mode}", losses_list[2]/tb_freq, i)
+            losses_list = [0.,0.,0.]
+            self.writer.flush()
+            print('writer flushed')
+
+#                if i==0:
+#                    hist_arr = np.array([g_loss_id.item(), g_loss_id_psnt.item(), g_loss_cd.item()])
+#                else:
+#                    temp_arr = np.array([g_loss_id.item(), g_loss_id_psnt.item(), g_loss_cd.item()])
+#                    hist_arr = np.vstack((hist_arr, temp_arr))
                 # =================================================================================== #
                 #                                 4. Miscellaneous                                    #
                 # =================================================================================== #
                 #pdb.set_trace()
 
                 # Print out training information.
-                if (i+1) % self.log_step == 0:
-                    et = time.time() - start_time
-                    et = str(datetime.timedelta(seconds=et))[:-7]
-                    log = "Elapsed [{}], Iteration [{}/{}]".format(et, i+1, self.num_iters)
-                    for tag in keys:
-                        log += ", {}: {:.4f}".format(tag, loss[tag])
-                    print(log)
-                    log_list.append(log)
+            if (i+1) % self.log_step == 0:
+                et = time.time() - start_time
+                et = str(datetime.timedelta(seconds=et))[:-7]
+                log = "Elapsed [{}], Iteration [{}/{}]".format(et, i+1, self.num_iters)
+                for tag in keys:
+                    log += ", {}: {:.4f}".format(tag, loss[tag])
+                print(log)
+                log_list.append(log)
 
                 if (i+1) % self.spec_freq == 0:
                     # save x and x_hat images
@@ -303,4 +308,4 @@ class Solver(object):
                     utils.saveContourPlots(modified_array, hist_file_path, labels, num_cols) 
                     with open(self.config.data_dir +'/' +self.config.file_name +'/log_list.pkl', 'wb') as File:
                         pickle.dump(log_list, File)
-        writer.close()
+        self.writer.close()
