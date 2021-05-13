@@ -264,6 +264,7 @@ class VctkFromMeta(Dataset):
         if self.one_hot==False:
             return uttr, (index, emb_org), speaker_name
 
+# writing this line as an excuse to update git message
     def __len__(self):
         """Return the number of spkrs."""
         return self.num_tokens

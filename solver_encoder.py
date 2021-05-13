@@ -21,7 +21,7 @@ def save_ckpt(model, model_optimizer, loss, iteration, save_path):
         'loss': loss}
     torch.save(checkpoint, save_path)
 
-
+# writing this line as an excuse to update git message
 class earlyStopping():
     def __init__(self, patience):
         self.patience = patience
