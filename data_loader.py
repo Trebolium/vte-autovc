@@ -11,6 +11,7 @@ class SpecChunksFromPkl(Dataset):
     generates random windowed subspec examples,
     associated labels,
     optional conditioning."""
+    # made originally for medleydb pkl
     def __init__(self, config, spmel_params):
         """Initialize and preprocess the dataset."""
         self.config = config
@@ -47,7 +48,8 @@ class SpecChunksFromPkl(Dataset):
         # index specifies 
         track_list = dataset[index]
         spmel_chunk_list = track_list[random.randint(0,len(track_list)-1)]
-        spmel, song_counter, chunk_counter, file_name = spmel_chunk_list[random.randint(0,len(spmel_chunk_list)-1)]
+        spmel, dataset_idx, chunk_counter, file_name = spmel_chunk_list[random.randint(0,len(spmel_chunk_list)-1)]
+        pdb.set_trace()
         # pick random spmel_chunk with random crop
         """Ensure all spmels are the length of (self.window_size * chunk_num)"""
         if spmel.shape[0] >= self.window_size:
@@ -58,7 +60,7 @@ class SpecChunksFromPkl(Dataset):
         # may need to set chunk_num to constant value so that all tensor sizes are of known shape for the LSTM
         # a constant will also mean it is easier to group off to be part of the same recording
         # the smallest is 301 frames. If the window sizes are 44, then that 6 full windows each
-        return adjusted_length_spmel, song_counter, chunk_counter, file_name
+        return adjusted_length_spmel, dataset_idx, os.path.basename(file_name[:-4])
 
     def __len__(self):
         """Return the number of spkrs."""
@@ -87,7 +89,6 @@ class PathSpecDataset(Dataset):
         dir_name, _, fileList = next(os.walk('/homes/bdoc3/my_data/phonDet/spmel_autovc_params_unnormalized'))
         fileList = sorted(fileList)
         dataset = []
-        pdb.set_trace()
         # group dataset by singers
         for singer_idx, singer_name in enumerate(singer_names):
             singer_examples = []
@@ -96,10 +97,9 @@ class PathSpecDataset(Dataset):
                     spmel = np.load(os.path.join(dir_name, file_name))
                     for style_idx, style_name in enumerate(style_names):
                         if style_name in file_name:
-                            singer_examples.append((spmel, style_idx))
+                            singer_examples.append((spmel, singer_idx, os.path.basename(file_name[:-4])))
                             break #if stle found, break stype loop
             dataset.append(singer_examples)
-        pdb.set_trace()
         self.dataset = dataset
         self.num_specs = len(dataset)
         
@@ -111,7 +111,8 @@ class PathSpecDataset(Dataset):
         # pick a random speaker
         dataset = self.dataset
         # spkr_data is literally a list of skpr_id, emb, and utterances from a single speaker
-        spmel, style_idx, singer_idx  = dataset[index]
+        utters_meta = dataset[index]
+        spmel, dataset_idx, example_id = utters_meta[random.randint(0,len(utters_meta)-1)]
         # pick random spmel_chunk with random crop
         """Ensure all spmels are the length of (self.window_size * chunk_num)"""
         if spmel.shape[0] >= self.window_size:
@@ -121,7 +122,7 @@ class PathSpecDataset(Dataset):
         # may need to set chunk_num to constant value so that all tensor sizes are of known shape for the LSTM
         # a constant will also mean it is easier to group off to be part of the same recording
         # the smallest is 301 frames. If the window sizes are 44, then that 6 full windows each
-        return adjusted_length_spmel, style_idx, singer_idx
+        return adjusted_length_spmel, dataset_idx, example_id
 
     def __len__(self):
         """Return the number of spkrs."""
@@ -187,7 +188,6 @@ class VctkFromMeta(Dataset):
         # training set contains
         with open(self.config.data_dir +'/' +self.file_name +'/training_meta_data.pkl', 'wb') as train_pack:
             pickle.dump(training_set, train_pack)
-        # pdb.set_trace()
 
         training_info = pickle.load(open(self.config.data_dir +'/' +self.file_name +'/training_meta_data.pkl', 'rb'))
         num_speakers_seq = np.arange(len(training_info))
@@ -262,9 +262,7 @@ class VctkFromMeta(Dataset):
                 break
         one_hot_spkr_label = self.one_hot_array[spkr_label]
         if self.one_hot==False:
-            return uttr, emb_org, speaker_name # pitch
-        else:
-            return uttr, one_hot_spkr_label, speaker_name
+            return uttr, (index, emb_org), speaker_name
 
     def __len__(self):
         """Return the number of spkrs."""
