@@ -27,3 +27,40 @@ Traceback (most recent call last):
   File "main.py", line 29, in main
     vocalSet = get_loader(config)
 TypeError: get_loader() missing 1 required positional argument: 'index_for_splits'
+Namespace(adam_init=0.0001, batch_size=2, chunk_num=6, chunk_seconds=0.5, ckpt_freq=50000, ckpt_model='', data_dir='/homes/bdoc3/my_data/autovc_data/autoStc', dim_emb=256, dim_neck=32, dim_pre=512, emb_ckpt='/homes/bdoc3/phonDet/results/newStandardAutovcSpmelParamsUnnormLatent64Out256/best_epoch_checkpoint.pth.tar', exclude_list=['m2_', 'm10_', 'm3_', 'f2_', 'f4_'], exclude_test=True, file_name='defaultName', freq=16, lambda_cd=1, len_crop=192, log_step=10, num_iters=100000, one_hot=False, patience=30, prnt_loss_weight=1.0, psnt_loss_weight=1.0, spec_freq=10000, spmel_dir='/homes/bdoc3/my_data/phonDet/spmel_autovc_params_unnormalized', train_iter=500, train_size=20, use_ckpt_config=False, use_loader='VctkFromMeta', which_cuda=1, which_embs='spkr-live', with_cd=False)
+Traceback (most recent call last):
+  File "main.py", line 145, in <module>
+Process Process-2:
+Process Process-3:
+    main(config)
+  File "main.py", line 41, in main
+    dataset = VctkFromMeta(config)
+  File "/homes/bdoc3/vte-autovc/data_loader.py", line 209, in __init__
+    p.join()
+  File "/import/linux/python/3.7.7/lib/python3.7/multiprocessing/process.py", line 140, in join
+    res = self._popen.wait(timeout)
+  File "/import/linux/python/3.7.7/lib/python3.7/multiprocessing/popen_fork.py", line 48, in wait
+Traceback (most recent call last):
+Traceback (most recent call last):
+    return self.poll(os.WNOHANG if timeout == 0.0 else 0)  File "/import/linux/python/3.7.7/lib/python3.7/multiprocessing/process.py", line 297, in _bootstrap
+    self.run()
+
+  File "/import/linux/python/3.7.7/lib/python3.7/multiprocessing/process.py", line 297, in _bootstrap
+    self.run()
+  File "/import/linux/python/3.7.7/lib/python3.7/multiprocessing/popen_fork.py", line 28, in poll
+  File "/import/linux/python/3.7.7/lib/python3.7/multiprocessing/process.py", line 99, in run
+    self._target(*self._args, **self._kwargs)
+  File "/import/linux/python/3.7.7/lib/python3.7/multiprocessing/process.py", line 99, in run
+    self._target(*self._args, **self._kwargs)
+  File "/homes/bdoc3/vte-autovc/data_loader.py", line 225, in load_data
+    uttrs[j] = np.load(os.path.join('/homes/bdoc3/my_data/autovc_data/spmel', tmp))
+  File "/homes/bdoc3/vte-autovc/data_loader.py", line 225, in load_data
+    uttrs[j] = np.load(os.path.join('/homes/bdoc3/my_data/autovc_data/spmel', tmp))
+  File "/homes/bdoc3/.local/lib/python3.7/site-packages/numpy/lib/npyio.py", line 416, in load
+    fid = stack.enter_context(open(os_fspath(file), "rb"))
+  File "/homes/bdoc3/.local/lib/python3.7/site-packages/numpy/lib/npyio.py", line 416, in load
+    fid = stack.enter_context(open(os_fspath(file), "rb"))
+KeyboardInterrupt
+KeyboardInterrupt
+    pid, sts = os.waitpid(self.pid, flag)
+KeyboardInterrupt

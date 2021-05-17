@@ -49,7 +49,6 @@ class SpecChunksFromPkl(Dataset):
         track_list = dataset[index]
         spmel_chunk_list = track_list[random.randint(0,len(track_list)-1)]
         spmel, dataset_idx, chunk_counter, file_name = spmel_chunk_list[random.randint(0,len(spmel_chunk_list)-1)]
-        pdb.set_trace()
         # pick random spmel_chunk with random crop
         """Ensure all spmels are the length of (self.window_size * chunk_num)"""
         if spmel.shape[0] >= self.window_size:

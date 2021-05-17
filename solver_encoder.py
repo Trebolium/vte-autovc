@@ -100,8 +100,10 @@ class Solver(object):
                 new_key = key[7:]
                 new_state_dict[new_key] = val 
             self.C.load_state_dict(new_state_dict)
-            #self.C.to(self.device)
-
+               # freezes weights so they are unaffected by backprop
+            for param in self.C.parameters():
+                param.requires_grad = False
+            self.C.to(self.device)
             
         self.G = Generator(self.config.dim_neck, self.config.dim_emb, self.config.dim_pre, self.config.freq)        
         self.g_optimizer = torch.optim.Adam(self.G.parameters(), self.config.adam_init)
@@ -215,6 +217,7 @@ class Solver(object):
                         g_loss = (self.config.prnt_loss_weight * g_loss_id) + (self.config.psnt_loss_weight * g_loss_id_psnt) + (self.config.lambda_cd * g_loss_cd)
                     else:
                         g_loss = (self.config.prnt_loss_weight * g_loss_id) + (self.config.psnt_loss_weight * g_loss_id_psnt) #+ ((self.config.lambda_cd  * (i / 100000)) * g_loss_cd)
+                    
                     self.reset_grad()
                     g_loss.backward()
                     self.g_optimizer.step()
@@ -246,7 +249,7 @@ class Solver(object):
                                 plt.clim(0,1)
                             plt.imshow(spec)
                             try:
-                                name = 'Egs ' +str(example_id[j%2]) +', ds_idx ' +str(dataset_idx[j%2])
+                                name = 'Egs ' +str(example_id[j%2]) +', ds_idx ' +str(dataset_idx[0][j%2])
                             except:
                                 pdb.set_trace()
                             plt.title(name)
