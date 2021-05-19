@@ -152,7 +152,6 @@ class Solver(object):
                 except:
                     data_iter = iter(data_loader)
                     x_real, dataset_idx, example_id = next(data_iter)
-                #print(f'iter {i}, ds_idx {dataset_idx}, example_id {example_id}')
             
                 x_real = x_real.to(self.device).float() 
                 x_real_chunked = x_real.view(x_real.shape[0]*self.config.chunk_num, x_real.shape[1]//self.config.chunk_num, -1)
@@ -161,17 +160,19 @@ class Solver(object):
                 # =================================================================================== #
 
                 # DESIGNED ONLY FOR VCTK TESTS
-#                if self.config.which_embs == 'vt-live':
-                pred_style_idx, all_tensors = self.vte(x_real_chunked)
-                emb_org = all_tensors[-1]
-#                elif self.config.which_embs == 'vt-avg':
-#                    pred_output, all_tensors = self.vte(x_real_chunked)
-#                    _, style_idx = torch.max(pred_output,1)
-#                    emb_org = torch.tensor(self.avg_vt_embs[style_idx.cpu()]).to(self.device)
-#                elif self.config.which_embs == 'spkrid-live':
-#                    emb_org = self.C(x_real)
-#                elif self.config.which_embs == 'spkrid-avg':
-#                    emb_org = dataset_idx[1].to(self.device).float() # because Vctk datalaoder is configured this way 
+                if self.config.which_embs == 'vt-live':
+                    pred_style_idx, all_tensors = self.vte(x_real_chunked)
+                    emb_org = all_tensors[-1]
+                elif self.config.which_embs == 'vt-avg':
+                    pred_output, all_tensors = self.vte(x_real_chunked)
+                    _, style_idx = torch.max(pred_output,1)
+                    emb_org = torch.tensor(self.avg_vt_embs[style_idx.cpu()]).to(self.device)
+                elif self.config.which_embs == 'spkrid-live':
+                    emb_org = self.C(x_real)
+                    dataset_idx = dataset_idx[0]
+                elif self.config.which_embs == 'spkrid-avg':
+                    emb_org = dataset_idx[1].to(self.device).float() # because Vctk datalaoder is configured this way 
+                    dataset_idx = dataset_idx[0]
 
                 self.G = self.G.train()
                 # x_identic_psnt consists of the original mel + the residual definiton added ontop
@@ -248,7 +249,7 @@ class Solver(object):
                                 plt.clim(0,1)
                             plt.imshow(spec)
                             try:
-                                name = 'Egs ' +str(example_id[j%2]) +', ds_idx ' +str(dataset_idx[j%2])
+                                name = 'Egs ' +str(example_id[j%2])
                             except:
                                 pdb.set_trace()
                             plt.title(name)
@@ -301,4 +302,4 @@ class Solver(object):
                 losses_list, _ = batch_iterate()
             logs(losses_list, keys, mode, current_iter)
 
-        return current_iter, log_list            
+        return current_iter, log_list   

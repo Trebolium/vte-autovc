@@ -156,7 +156,7 @@ class VctkFromMeta(Dataset):
         self.file_name = config.file_name
         self.one_hot = config.one_hot
 
-        meta_all_data = pickle.load(open('/homes/bdoc3/my_data/autovc_data/autovc_basic/all_meta_data.pkl', "rb"))
+        meta_all_data = pickle.load(open('/homes/bdoc3/my_data/autovc_data/all_meta_data.pkl', "rb"))
         # split into training data
         num_training_speakers=config.train_size
         random.seed(1)
@@ -210,8 +210,6 @@ class VctkFromMeta(Dataset):
         self.train_dataset = list(dataset)
         self.num_tokens = len(self.train_dataset)
         
-        print('Finished loading the dataset...')
-        
     # this function is called within the class init (after self.data_loader its the arguments) 
     def load_data(self, submeta, dataset, idx_offset):  
         for k, sbmt in enumerate(submeta):    
@@ -261,7 +259,7 @@ class VctkFromMeta(Dataset):
                 break
         one_hot_spkr_label = self.one_hot_array[spkr_label]
         if self.one_hot==False:
-            return uttr, (index, emb_org), speaker_name
+            return uttr, index, speaker_name
 
 # writing this line as an excuse to update git message
     def __len__(self):
