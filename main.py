@@ -1,5 +1,6 @@
 import os, pdb, pickle, random, argparse, shutil, yaml
 from solver_encoder import Solver
+#from solver_encoder_singerid_embs import Solver
 from data_loader import VctkFromMeta, PathSpecDataset, SpecChunksFromPkl
 from torch.backends import cudnn
 from torch.utils.tensorboard import SummaryWriter
@@ -27,59 +28,85 @@ def new_song_idx(dataset):
     return new_Song_idxs
 
 def main(config):
-    # For fast training.
-    cudnn.benchmark = True
+    singer_names = ['m1_','m2_','m3_','m4_','m5_','m6_','m7_','m8_','m9_','m10_','m11_','f1_','f2_','f3_','f4_','f5_','f6_','f7_','f8_','f9_']
+    cudnn.benchmark = True # For fast training.
     random.seed(1)
+
     with open(config.spmel_dir +'/spmel_params.yaml') as File:
         spmel_params = yaml.load(File, Loader=yaml.FullLoader)
-    if config.use_loader == 'PathSpecDataset':
-        dataset = PathSpecDataset(config, spmel_params)
-    elif config.use_loader == 'SpecChunksFromPkl':
+
+    all_idxs = [i for i in range(20)] # assumes dataset is in the order of singer_names as seen above
+    dataset = PathSpecDataset(config, spmel_params)
+    vte_dir_config_path = config.emb_ckpt[:-30] +'/config_params.pkl'
+    vte_dir_config = pickle.load(open(vte_dir_config_path,'rb'))
+    vocalset_test_ids = vte_dir_config.test_list.split(' ')
+    vocalset_test_idxs = [singer_names.index(i) for i in vocalset_test_ids]
+
+    if config.use_loader == 'vocal':
+        train_song_idxs = [i for i in all_idxs if i not in vocalset_test_idxs]
+        train_sampler = SubsetRandomSampler(train_song_idxs)
+        train_loader = DataLoader(dataset, batch_size=config.batch_size, sampler=train_sampler, shuffle=False, drop_last=True)
+        d_idx_list = list(range(len(dataset)))
+    elif config.use_loader == 'medley':
         dataset = SpecChunksFromPkl(config, spmel_params)
-    elif config.use_loader == 'VctkFromMeta':
+        d_idx_list = list(range(len(dataset)))
+        train_song_idxs = random.sample(d_idx_list, int(len(dataset)*0.8)) 
+        train_sampler = SubsetRandomSampler(train_song_idxs)
+        train_loader = DataLoader(dataset, batch_size=config.batch_size, sampler=train_sampler, shuffle=False, drop_last=True)
+    elif config.use_loader == 'vctk':
         dataset = VctkFromMeta(config)
+        d_idx_list = list(range(len(dataset)))
+        train_song_idxs = random.sample(d_idx_list, int(len(dataset)*0.8)) 
+        train_sampler = SubsetRandomSampler(train_song_idxs)
+        train_loader = DataLoader(dataset, batch_size=config.batch_size, sampler=train_sampler, shuffle=False, drop_last=True)
     else: raise NameError('use_loader string not valid')
-    
-    d_idx_list = list(range(len(dataset)))
-    train_song_idxs = random.sample(d_idx_list, int(len(dataset)*0.8)) 
-    train_sampler = SubsetRandomSampler(train_song_idxs)
+
 
     if config.eval_all == True:
-        vctk = VctkFromMeta(config)
         medleydb = SpecChunksFromPkl(config, spmel_params)
         vocalset = PathSpecDataset(config, spmel_params)
-        datasets = [vocalset, medleydb, vctk]
+        vctk = VctkFromMeta(config)
+        datasets = [medleydb, vocalset, vctk]
         print('Finished loading the datasets...')
-        accum_ds_size = 0
-        all_ds_test_idxs = []
+        test_loaders = []
+        ds_ids_train_idxs = []
         d_idx_list = list(range(len(datasets)))
-        for ds in datasets:
+        ds_labels = ['medley', 'vocal', 'vctk']
+        for i, ds in enumerate(datasets):
             random.seed(1) # reinstigating this at every iteration ensures the same random numbers are for each dataset
             current_ds_size = len(ds)
             d_idx_list = list(range(current_ds_size))
-            train_song_idxs = random.sample(d_idx_list, int(current_ds_size*0.8))
-            test_song_idxs = [x for x in d_idx_list if x not in train_song_idxs]
-            idxs_with_offset = [idx + accum_ds_size for idx in test_song_idxs]
-            all_ds_test_idxs.extend(idxs_with_offset)
-            accum_ds_size += current_ds_size
-        c_datasets = ConcatDataset(datasets)
-        test_sampler = SubsetRandomSampler(all_ds_test_idxs)
-        config.test_idxs = all_ds_test_idxs
-        test_loader = DataLoader(c_datasets, batch_size=config.batch_size, sampler=test_sampler, shuffle=False, drop_last=True)
+            if i==0:
+                train_song_idxs = random.sample(d_idx_list, int(current_ds_size*0.8))
+                test_song_idxs = [x for x in d_idx_list if x not in train_song_idxs]
+                ds_ids_train_idxs.append((ds_labels[i], [(x[2][:-10]) for x in ds], train_song_idxs))
+            elif i==1:
+                train_song_idxs = [i for i in all_idxs if i not in vocalset_test_idxs]
+                test_song_idxs = vocalset_test_idxs
+                ds_ids_train_idxs.append((ds_labels[i], [(x[2].split('_')[0]) for x in ds], train_song_idxs))
+            elif i==2:
+                train_song_idxs = random.sample(d_idx_list, int(current_ds_size*0.8))
+                test_song_idxs = [x for x in d_idx_list if x not in train_song_idxs]
+                # save all singer_ids and the idx of only those we'll use for trainingtrain_song_idxs
+                ds_ids_train_idxs.append((ds_labels[i], [(x[2]) for x in ds], train_song_idxs))
+            test_sampler = SubsetRandomSampler(test_song_idxs)
+            test_loader = DataLoader(ds, batch_size=config.batch_size, sampler=test_sampler, shuffle=False, drop_last=True)
+            test_loaders.append((ds_labels[i], test_loader))
+        with open('dataset_ids_train_idxs.pkl','wb') as File:
+            pickle.dump(ds_ids_train_idxs, File)
     else:
         test_song_idxs = [x for x in d_idx_list if x not in train_song_idxs]
         config.test_idxs = test_song_idxs
         test_sampler = SubsetRandomSampler(test_song_idxs)
-        test_loader = DataLoader(dataset, batch_size=config.batch_size, sampler=test_sampler, shuffle=False, drop_last=True)
+        test_loaders = DataLoader(dataset, batch_size=config.batch_size, sampler=test_sampler, shuffle=False, drop_last=True)
 
-    train_loader = DataLoader(dataset, batch_size=config.batch_size, sampler=train_sampler, shuffle=False, drop_last=True)
     solver = Solver(train_loader, config, spmel_params)
     current_iter = solver.get_current_iters()
     log_list = []
-    pdb.set_trace()
     while current_iter < config.num_iters:
-       current_iter, log_list = solver.iterate('train', train_loader, current_iter, config.train_iter, log_list)
-       current_iter, log_list = solver.iterate('test', test_loader, current_iter, int(config.train_iter*0.2), log_list)
+        current_iter, log_list = solver.iterate('train', train_loader, current_iter, config.train_iter, log_list)
+        for ds_label, test_loader in test_loaders:
+            current_iter, log_list = solver.iterate(f'test_{ds_label}', test_loader, current_iter, int(config.train_iter*0.2), log_list)
     solver.closeWriter()
     with open(config.data_dir +'/' +config.file_name +'/log_list.pkl', 'wb') as File:
         pickle.dump(log_list, File)
@@ -90,7 +117,7 @@ if __name__ == '__main__':
 
     # use configurations from a previous model
     parser.add_argument('--use_ckpt_config', type=str2bool, default=False, help='path to config file to use')
-    parser.add_argument('--use_loader', type=str, default='PathSpecDataset', help='take singer ids to exclude from the VTEs config.test_list')
+    parser.add_argument('--use_loader', type=str, default='vocal', help='take singer ids to exclude from the VTEs config.test_list')
     parser.add_argument('--ckpt_model', type=str, default='', help='path to the ckpt model want to use')
     parser.add_argument('--data_dir', type=str, default='/homes/bdoc3/my_data/autovc_data/autoStc', help='path to config file to use')
     parser.add_argument('--which_embs', type=str, default='vt-live', help='path to config file to use')
@@ -117,7 +144,7 @@ if __name__ == '__main__':
     parser.add_argument('--psnt_loss_weight', type=float, default=1.0, help='Determine weight applied to postnet reconstruction loss')
     parser.add_argument('--prnt_loss_weight', type=float, default=1.0, help='Determine weight applied to pre-net reconstruction loss')
     parser.add_argument('--patience', type=float, default=30, help='Determine weight applied to pre-net reconstruction loss')
-    parser.add_argument('--eval_all', type=str2bool, default=False, help='determines whether to evaluate with one DataLoader or all DataLoaders')
+    parser.add_argument('--eval_all', type=str2bool, default=True, help='determines whether to evaluate with one DataLoader or all DataLoaders')
  
     # Miscellaneous.
     parser.add_argument('--emb_ckpt', type=str, default='/homes/bdoc3/phonDet/results/newStandardAutovcSpmelParamsUnnormLatent64Out256/best_epoch_checkpoint.pth.tar', help='toggle checkpoint load function')
@@ -164,4 +191,5 @@ if __name__ == '__main__':
     open(config.data_dir +'/' +config.file_name +'/config.txt', 'a').write(str(config))
     copyfile('./model_vc.py',(config.data_dir +'/' +config.file_name +'/this_model_vc.py'))
     copyfile('./solver_encoder.py',(config.data_dir +'/' +config.file_name +'/solver_encoder.py'))
+    copyfile('./main.py',(config.data_dir +'/' +config.file_name +'/main.py'))
     main(config)

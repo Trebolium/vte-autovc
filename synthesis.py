@@ -13,7 +13,7 @@ from wavenet_vocoder import builder
 
 torch.set_num_threads(4)
 use_cuda = torch.cuda.is_available()
-device = torch.device("cuda:1" if use_cuda else "cpu")
+device = torch.device("cuda:0" if use_cuda else "cpu")
 torch.cuda.set_device(device)
 
 def build_model():

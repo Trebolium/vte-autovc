@@ -81,6 +81,7 @@ for i, (name, numpyObj) in enumerate(numpy_list):
     print(i,'/',len(numpy_list))
     x_real = numpyObj.unsqueeze(0) # make in tensor format by adding batch dim
     x_real_chunked = x_real.view(x_real.shape[0]*config.chunk_num, x_real.shape[1]//config.chunk_num, -1)
+    pdb.set_trace()
     _, all_tensors = vte(x_real_chunked)
     emb_org = all_tensors[-1]
     all_spmels = []

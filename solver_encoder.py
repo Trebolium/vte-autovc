@@ -161,15 +161,15 @@ class Solver(object):
                 # =================================================================================== #
 
                 # DESIGNED ONLY FOR VCTK TESTS
-#                if self.config.which_embs == 'vt-live':
-                pred_style_idx, all_tensors = self.vte(x_real_chunked)
-                emb_org = all_tensors[-1]
+                if self.config.which_embs == 'vt-live':
+                    pred_style_idx, all_tensors = self.vte(x_real_chunked)
+                    emb_org = all_tensors[-1]
 #                elif self.config.which_embs == 'vt-avg':
 #                    pred_output, all_tensors = self.vte(x_real_chunked)
 #                    _, style_idx = torch.max(pred_output,1)
 #                    emb_org = torch.tensor(self.avg_vt_embs[style_idx.cpu()]).to(self.device)
-#                elif self.config.which_embs == 'spkrid-live':
-#                    emb_org = self.C(x_real)
+                elif self.config.which_embs == 'spkrid-live':
+                    emb_org = self.C(x_real)
 #                elif self.config.which_embs == 'spkrid-avg':
 #                    emb_org = dataset_idx[1].to(self.device).float() # because Vctk datalaoder is configured this way 
 
@@ -264,11 +264,16 @@ class Solver(object):
 
 #=====================================================================================================================================#
 
-        def logs(losses_list, keys, mode, current_iter): 
-
-            self.writer.add_scalar(f"Loss_id/{mode}", losses_list[0]/(cycle_size*self.config.batch_size), current_iter)
-            self.writer.add_scalar(f"Loss_id_psnt/{mode}", losses_list[1]/(cycle_size*self.config.batch_size), current_iter)
-            self.writer.add_scalar(f"Loss_cd/{mode}", losses_list[2]/(cycle_size*self.config.batch_size), current_iter)
+        def logs(losses_list, mode, current_iter): 
+            if mode[5:]=='vocal':
+                self.writer.add_scalar(f"Loss_id_psnt_{mode[5:]}/{mode[:5]}", losses_list[1]/(cycle_size*self.config.batch_size), current_iter)
+            elif mode[5:]=='medley':
+                self.writer.add_scalar(f"Loss_id_psnt_{mode[5:]}/{mode[:5]}", losses_list[1]/(cycle_size*self.config.batch_size), current_iter)
+            elif mode[5:]=='vctk':
+                self.writer.add_scalar(f"Loss_id_psnt_{mode[5:]}/{mode[:5]}", losses_list[1]/(cycle_size*self.config.batch_size), current_iter)
+            elif mode=='train':
+                self.writer.add_scalar(f"Loss_id_psnt_{self.config.use_loader}/{mode}", losses_list[1]/(cycle_size*self.config.batch_size), current_iter)
+            else: exit(1)
             losses_list = [0.,0.,0.]
             self.writer.flush()
             print('writer flushed')
@@ -291,14 +296,14 @@ class Solver(object):
 #            loss_hist=history_list[0]
 #            acc_hist=history_list[1]
             losses_list, current_iter = batch_iterate()
-            logs(losses_list, keys, mode, current_iter)
-        elif mode == 'test':
+            logs(losses_list, mode, current_iter)
+        elif mode.startswith('test'):
             best_acc = 0 
             self.G.eval()
 #            loss_hist=history_list[2]
 #            acc_hist=history_list[3]
             with torch.no_grad():
                 losses_list, _ = batch_iterate()
-            logs(losses_list, keys, mode, current_iter)
+            logs(losses_list, mode, current_iter)
 
         return current_iter, log_list            

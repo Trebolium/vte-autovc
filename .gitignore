@@ -7,4 +7,5 @@ runs/
 testRuns/
 .*.sw*
 *.pyc
+.nfs*
 *.log

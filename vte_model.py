@@ -26,7 +26,6 @@ class Vt_Embedder(nn.Module):
         self.maxpool_factor_width = int(self.window_size/2/2/2)
         self.is_blstm = True
         self.lstm_num = 2
-        self.file_name = config.file_name
 
         self.conv_layer1 = nn.Sequential(
                 nn.Conv2d(1
