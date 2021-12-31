@@ -32,7 +32,7 @@ def main(config):
     cudnn.benchmark = True # For fast training.
     random.seed(1)
 
-    with open(config.spmel_dir +'/spmel_params.yaml') as File:
+    with open('/homes/bdoc3/my_data/spmel_data/vocalSet_subset_unnormed/uuuuuspmel_params.yaml') as File:
         spmel_params = yaml.load(File, Loader=yaml.FullLoader)
 
     all_idxs = [i for i in range(20)] # assumes dataset is in the order of singer_names as seen above
